@@ -32,17 +32,15 @@ export function ContactsTab() {
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
   const [importPage, setImportPage] = useState(1);
-  const [filter, setFilter] = useState<string>("all");
   const [importResult, setImportResult] = useState<string | null>(null);
 
   const fetchContacts = useCallback(async () => {
     setLoading(true);
-    const params = filter !== "all" ? `?status=${filter}` : "";
-    const res = await fetch(`/api/contacts${params}`);
+    const res = await fetch("/api/contacts");
     const data = await res.json();
     setContacts(data);
     setLoading(false);
-  }, [filter]);
+  }, []);
 
   useEffect(() => {
     fetchContacts();
@@ -80,8 +78,6 @@ export function ContactsTab() {
     fetchContacts();
   };
 
-  const filters = ["all", "new", "approved", "enrolled", "replied", "opted_out", "rejected"];
-
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -101,22 +97,6 @@ export function ContactsTab() {
             {importing ? "Importing..." : `Import from Apollo (Page ${importPage})`}
           </button>
         </div>
-      </div>
-
-      <div className="flex gap-1 mb-4">
-        {filters.map((f) => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors capitalize ${
-              filter === f
-                ? "bg-black text-white"
-                : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-200"
-            }`}
-          >
-            {f === "opted_out" ? "Opted Out" : f}
-          </button>
-        ))}
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
