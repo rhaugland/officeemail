@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 
 type Contact = {
   id: string;
@@ -27,12 +27,38 @@ const STATUS_COLORS: Record<string, string> = {
   opted_out: "bg-gray-300 text-gray-600",
 };
 
+type FilterKey = "title" | "companyName" | "companyLocation" | "industry" | "status";
+
+const FILTER_COLUMNS: { key: FilterKey; label: string }[] = [
+  { key: "title", label: "Title" },
+  { key: "companyName", label: "Company" },
+  { key: "companyLocation", label: "Location" },
+  { key: "industry", label: "Industry" },
+  { key: "status", label: "Status" },
+];
+
+function FilterIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+    </svg>
+  );
+}
+
 export function ContactsTab() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
   const [importPage, setImportPage] = useState(1);
   const [importResult, setImportResult] = useState<string | null>(null);
+  const [filters, setFilters] = useState<Record<FilterKey, string>>({
+    title: "",
+    companyName: "",
+    companyLocation: "",
+    industry: "",
+    status: "",
+  });
+  const [openFilter, setOpenFilter] = useState<FilterKey | null>(null);
 
   const fetchContacts = useCallback(async () => {
     setLoading(true);
@@ -45,6 +71,47 @@ export function ContactsTab() {
   useEffect(() => {
     fetchContacts();
   }, [fetchContacts]);
+
+  // Build unique values for each filterable column
+  const filterOptions = useMemo(() => {
+    const opts: Record<FilterKey, string[]> = {
+      title: [],
+      companyName: [],
+      companyLocation: [],
+      industry: [],
+      status: [],
+    };
+    for (const c of contacts) {
+      for (const col of FILTER_COLUMNS) {
+        const val = col.key === "status"
+          ? (c.status === "opted_out" ? "Opted Out" : c.status)
+          : (c[col.key] || "");
+        if (val && !opts[col.key].includes(val)) {
+          opts[col.key].push(val);
+        }
+      }
+    }
+    for (const key of Object.keys(opts) as FilterKey[]) {
+      opts[key].sort();
+    }
+    return opts;
+  }, [contacts]);
+
+  const filteredContacts = useMemo(() => {
+    return contacts.filter((c) => {
+      for (const col of FILTER_COLUMNS) {
+        const filterVal = filters[col.key];
+        if (!filterVal) continue;
+        const cellVal = col.key === "status"
+          ? (c.status === "opted_out" ? "Opted Out" : c.status)
+          : (c[col.key] || "");
+        if (cellVal !== filterVal) return false;
+      }
+      return true;
+    });
+  }, [contacts, filters]);
+
+  const activeFilterCount = Object.values(filters).filter(Boolean).length;
 
   const importFromApollo = async () => {
     setImporting(true);
@@ -78,12 +145,83 @@ export function ContactsTab() {
     fetchContacts();
   };
 
+  const clearFilters = () => {
+    setFilters({ title: "", companyName: "", companyLocation: "", industry: "", status: "" });
+  };
+
+  const renderHeader = (label: string, filterKey?: FilterKey) => {
+    if (!filterKey) {
+      return <th className="text-left px-4 py-3 font-medium text-gray-500">{label}</th>;
+    }
+
+    const isActive = !!filters[filterKey];
+    const isOpen = openFilter === filterKey;
+
+    return (
+      <th className="text-left px-4 py-3 font-medium text-gray-500 relative">
+        <button
+          onClick={() => setOpenFilter(isOpen ? null : filterKey)}
+          className={`inline-flex items-center gap-1.5 hover:text-gray-900 transition-colors ${
+            isActive ? "text-gray-900" : ""
+          }`}
+        >
+          {label}
+          <span className={isActive ? "text-black" : "text-gray-400"}>
+            <FilterIcon />
+          </span>
+        </button>
+        {isOpen && (
+          <>
+            <div className="fixed inset-0 z-10" onClick={() => setOpenFilter(null)} />
+            <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 min-w-[180px] max-h-[280px] overflow-y-auto">
+              <button
+                onClick={() => {
+                  setFilters((f) => ({ ...f, [filterKey]: "" }));
+                  setOpenFilter(null);
+                }}
+                className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${
+                  !filters[filterKey] ? "font-medium text-black" : "text-gray-600"
+                }`}
+              >
+                All
+              </button>
+              {filterOptions[filterKey].map((val) => (
+                <button
+                  key={val}
+                  onClick={() => {
+                    setFilters((f) => ({ ...f, [filterKey]: val }));
+                    setOpenFilter(null);
+                  }}
+                  className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 capitalize ${
+                    filters[filterKey] === val ? "font-medium text-black bg-gray-50" : "text-gray-600"
+                  }`}
+                >
+                  {val}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </th>
+    );
+  };
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-2">
           <h2 className="text-lg font-semibold">Contacts</h2>
-          <span className="text-sm text-gray-500">({contacts.length})</span>
+          <span className="text-sm text-gray-500">
+            ({filteredContacts.length}{activeFilterCount > 0 ? ` of ${contacts.length}` : ""})
+          </span>
+          {activeFilterCount > 0 && (
+            <button
+              onClick={clearFilters}
+              className="text-xs text-gray-500 hover:text-black underline ml-1"
+            >
+              Clear filters
+            </button>
+          )}
         </div>
         <div className="flex items-center gap-3">
           {importResult && (
@@ -104,14 +242,14 @@ export function ContactsTab() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50">
-                <th className="text-left px-4 py-3 font-medium text-gray-500">Name</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-500">Email</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-500">Title</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-500">Company</th>
+                {renderHeader("Name")}
+                {renderHeader("Email")}
+                {renderHeader("Title", "title")}
+                {renderHeader("Company", "companyName")}
                 <th className="text-left px-4 py-3 font-medium text-gray-500">Size</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-500">Location</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-500">Industry</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-500">Status</th>
+                {renderHeader("Location", "companyLocation")}
+                {renderHeader("Industry", "industry")}
+                {renderHeader("Status", "status")}
                 <th className="text-left px-4 py-3 font-medium text-gray-500">Actions</th>
               </tr>
             </thead>
@@ -122,14 +260,16 @@ export function ContactsTab() {
                     Loading...
                   </td>
                 </tr>
-              ) : contacts.length === 0 ? (
+              ) : filteredContacts.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="px-4 py-12 text-center text-gray-400">
-                    No contacts yet. Import from Apollo to get started.
+                    {contacts.length === 0
+                      ? "No contacts yet. Import from Apollo to get started."
+                      : "No contacts match the current filters."}
                   </td>
                 </tr>
               ) : (
-                contacts.map((contact) => (
+                filteredContacts.map((contact) => (
                   <tr key={contact.id} className="border-b border-gray-50 hover:bg-gray-50/50">
                     <td className="px-4 py-3 font-medium">
                       {contact.firstName} {contact.lastName}
