@@ -107,14 +107,14 @@ export function SequencesTab() {
         <h2 className="text-lg font-semibold">Sequences</h2>
         <button
           onClick={() => setShowNewSequence(true)}
-          className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors"
+          className="px-4 py-2 bg-black text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors"
         >
           New Sequence
         </button>
       </div>
 
       {sendResult && (
-        <div className="mb-4 px-4 py-2 bg-blue-50 text-blue-800 text-sm rounded-lg">
+        <div className="mb-4 px-4 py-2 bg-gray-100 text-gray-800 text-sm rounded-lg">
           {sendResult}
         </div>
       )}
@@ -127,11 +127,11 @@ export function SequencesTab() {
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               placeholder="Sequence name (e.g. CHRO Outreach Q4)"
-              className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+              className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black"
             />
             <button
               onClick={createSequence}
-              className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800"
+              className="px-4 py-2 bg-black text-white text-sm font-medium rounded-lg hover:bg-gray-800"
             >
               Create
             </button>
@@ -181,19 +181,19 @@ export function SequencesTab() {
                     value={phaseSubject}
                     onChange={(e) => setPhaseSubject(e.target.value)}
                     placeholder="Email subject (use {{first_name}}, {{company}} for personalization)"
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-black"
                   />
                   <textarea
                     value={phaseBody}
                     onChange={(e) => setPhaseBody(e.target.value)}
                     placeholder="Email body HTML (use {{first_name}}, {{last_name}}, {{company}}, {{title}} for personalization)"
                     rows={6}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-gray-900 resize-y"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-black resize-y"
                   />
                   <div className="flex gap-2">
                     <button
                       onClick={() => addPhase(seq.id)}
-                      className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800"
+                      className="px-4 py-2 bg-black text-white text-sm font-medium rounded-lg hover:bg-gray-800"
                     >
                       Add Phase
                     </button>
@@ -219,7 +219,7 @@ export function SequencesTab() {
                           <span
                             className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                               phase.isActive
-                                ? "bg-green-100 text-green-700"
+                                ? "bg-gray-900 text-white"
                                 : "bg-gray-100 text-gray-500"
                             }`}
                           >
@@ -236,8 +236,8 @@ export function SequencesTab() {
                           onClick={() => togglePhase(seq.id, phase.id, phase.isActive)}
                           className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
                             phase.isActive
-                              ? "border-red-200 text-red-600 hover:bg-red-50"
-                              : "border-green-200 text-green-600 hover:bg-green-50"
+                              ? "border-gray-300 text-gray-600 hover:bg-gray-100"
+                              : "border-gray-300 text-gray-900 hover:bg-gray-100"
                           }`}
                         >
                           {phase.isActive ? "Deactivate" : "Activate"}
@@ -246,7 +246,7 @@ export function SequencesTab() {
                           <button
                             onClick={() => sendPhase(seq.id, phase.id)}
                             disabled={sending === phase.id}
-                            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+                            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-black text-white hover:bg-gray-800 disabled:opacity-50"
                           >
                             {sending === phase.id ? "Sending..." : `Send Batch (${seq.dailyLimit})`}
                           </button>

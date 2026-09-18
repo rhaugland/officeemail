@@ -19,12 +19,12 @@ type Contact = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  new: "bg-blue-100 text-blue-800",
-  approved: "bg-green-100 text-green-800",
-  rejected: "bg-red-100 text-red-800",
-  enrolled: "bg-purple-100 text-purple-800",
-  replied: "bg-amber-100 text-amber-800",
-  opted_out: "bg-gray-100 text-gray-500",
+  new: "bg-gray-200 text-gray-800",
+  approved: "bg-gray-800 text-white",
+  rejected: "bg-gray-400 text-white",
+  enrolled: "bg-gray-700 text-white",
+  replied: "bg-gray-900 text-white",
+  opted_out: "bg-gray-300 text-gray-600",
 };
 
 export function ContactsTab() {
@@ -96,7 +96,7 @@ export function ContactsTab() {
           <button
             onClick={importFromApollo}
             disabled={importing}
-            className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+            className="px-4 py-2 bg-black text-white text-sm font-medium rounded-lg hover:bg-gray-800 disabled:opacity-50 transition-colors"
           >
             {importing ? "Importing..." : `Import from Apollo (Page ${importPage})`}
           </button>
@@ -110,7 +110,7 @@ export function ContactsTab() {
             onClick={() => setFilter(f)}
             className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors capitalize ${
               filter === f
-                ? "bg-gray-900 text-white"
+                ? "bg-black text-white"
                 : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-200"
             }`}
           >
@@ -174,14 +174,14 @@ export function ContactsTab() {
                         <div className="flex gap-1">
                           <button
                             onClick={() => updateStatus(contact.id, "approved")}
-                            className="w-8 h-8 flex items-center justify-center rounded-md bg-green-50 text-green-600 hover:bg-green-100 transition-colors"
+                            className="w-8 h-8 flex items-center justify-center rounded-md bg-gray-100 text-gray-900 hover:bg-gray-200 transition-colors"
                             title="Approve for sequence"
                           >
                             ✓
                           </button>
                           <button
                             onClick={() => updateStatus(contact.id, "rejected")}
-                            className="w-8 h-8 flex items-center justify-center rounded-md bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
+                            className="w-8 h-8 flex items-center justify-center rounded-md bg-gray-100 text-gray-900 hover:bg-gray-200 transition-colors"
                             title="Remove from list"
                           >
                             ✕
