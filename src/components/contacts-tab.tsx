@@ -59,6 +59,7 @@ export function ContactsTab() {
     status: "",
   });
   const [openFilter, setOpenFilter] = useState<FilterKey | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const fetchContacts = useCallback(async () => {
     setLoading(true);
@@ -72,7 +73,6 @@ export function ContactsTab() {
     fetchContacts();
   }, [fetchContacts]);
 
-  // Build unique values for each filterable column
   const filterOptions = useMemo(() => {
     const opts: Record<FilterKey, string[]> = {
       title: [],
@@ -145,6 +145,37 @@ export function ContactsTab() {
     fetchContacts();
   };
 
+  const bulkUpdateStatus = async (status: string) => {
+    if (selected.size === 0) return;
+    await fetch("/api/contacts/bulk", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: Array.from(selected), status }),
+    });
+    setSelected(new Set());
+    fetchContacts();
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selected.size === filteredContacts.length) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(filteredContacts.map((c) => c.id)));
+    }
+  };
+
   const clearFilters = () => {
     setFilters({ title: "", companyName: "", companyLocation: "", industry: "", status: "" });
   };
@@ -206,6 +237,8 @@ export function ContactsTab() {
     );
   };
 
+  const allSelected = filteredContacts.length > 0 && selected.size === filteredContacts.length;
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -237,11 +270,43 @@ export function ContactsTab() {
         </div>
       </div>
 
+      {selected.size > 0 && (
+        <div className="flex items-center gap-3 mb-4 px-4 py-3 bg-gray-100 rounded-lg">
+          <span className="text-sm font-medium">{selected.size} selected</span>
+          <button
+            onClick={() => bulkUpdateStatus("approved")}
+            className="px-3 py-1.5 text-sm font-medium bg-black text-white rounded-lg hover:bg-gray-800 transition-colors"
+          >
+            Approve for Sequence
+          </button>
+          <button
+            onClick={() => bulkUpdateStatus("rejected")}
+            className="px-3 py-1.5 text-sm font-medium bg-white text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            Remove from List
+          </button>
+          <button
+            onClick={() => setSelected(new Set())}
+            className="text-sm text-gray-500 hover:text-black ml-auto"
+          >
+            Clear selection
+          </button>
+        </div>
+      )}
+
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50">
+                <th className="px-4 py-3 w-10">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={toggleSelectAll}
+                    className="w-4 h-4 rounded border-gray-300 accent-black"
+                  />
+                </th>
                 {renderHeader("Name")}
                 {renderHeader("Email")}
                 {renderHeader("Title", "title")}
@@ -256,13 +321,13 @@ export function ContactsTab() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-12 text-center text-gray-400">
+                  <td colSpan={10} className="px-4 py-12 text-center text-gray-400">
                     Loading...
                   </td>
                 </tr>
               ) : filteredContacts.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-12 text-center text-gray-400">
+                  <td colSpan={10} className="px-4 py-12 text-center text-gray-400">
                     {contacts.length === 0
                       ? "No contacts yet. Import from Apollo to get started."
                       : "No contacts match the current filters."}
@@ -270,7 +335,20 @@ export function ContactsTab() {
                 </tr>
               ) : (
                 filteredContacts.map((contact) => (
-                  <tr key={contact.id} className="border-b border-gray-50 hover:bg-gray-50/50">
+                  <tr
+                    key={contact.id}
+                    className={`border-b border-gray-50 hover:bg-gray-50/50 ${
+                      selected.has(contact.id) ? "bg-gray-50" : ""
+                    }`}
+                  >
+                    <td className="px-4 py-3">
+                      <input
+                        type="checkbox"
+                        checked={selected.has(contact.id)}
+                        onChange={() => toggleSelect(contact.id)}
+                        className="w-4 h-4 rounded border-gray-300 accent-black"
+                      />
+                    </td>
                     <td className="px-4 py-3 font-medium">
                       {contact.firstName} {contact.lastName}
                     </td>
