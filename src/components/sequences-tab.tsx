@@ -10,6 +10,7 @@ type Phase = {
   body: string;
   isActive: boolean;
   sentCount: number;
+  eligibleCount: number;
 };
 
 type Sequence = {
@@ -398,7 +399,7 @@ export function SequencesTab() {
                               disabled={sending === phase.id}
                               className="px-3 py-1.5 text-xs font-medium rounded-lg bg-black text-white hover:bg-gray-800 disabled:opacity-50"
                             >
-                              {sending === phase.id ? "Sending..." : `Send Batch (${seq.dailyLimit})`}
+                              {sending === phase.id ? "Sending..." : `Send Batch (${phase.eligibleCount}/${seq.dailyLimit})`}
                             </button>
                           )}
                         </div>

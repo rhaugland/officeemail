@@ -21,9 +21,30 @@ export async function GET() {
         .from(sends)
         .where(eq(sends.phaseId, phase.id));
 
+      // Count eligible contacts (approved/enrolled, not already sent this phase)
+      const alreadySent = await getDb()
+        .select({ contactId: sends.contactId })
+        .from(sends)
+        .where(eq(sends.phaseId, phase.id));
+
+      const alreadySentIds = alreadySent.map((s) => s.contactId);
+
+      const [eligibleStats] = await getDb()
+        .select({ count: sql<number>`count(*)` })
+        .from(contacts)
+        .where(
+          and(
+            inArray(contacts.status, ["approved", "enrolled"]),
+            alreadySentIds.length > 0
+              ? notInArray(contacts.id, alreadySentIds)
+              : undefined
+          )
+        );
+
       phasesWithStats.push({
         ...phase,
         sentCount: Number(stats?.count || 0),
+        eligibleCount: Math.min(Number(eligibleStats?.count || 0), seq.dailyLimit),
       });
     }
 
