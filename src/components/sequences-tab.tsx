@@ -59,6 +59,9 @@ export function SequencesTab() {
   const [editBody, setEditBody] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveResult, setSaveResult] = useState<string | null>(null);
+  const [testEmail, setTestEmail] = useState("");
+  const [testingPhase, setTestingPhase] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<string | null>(null);
   const subjectRef = useRef<HTMLInputElement>(null);
   const newSubjectRef = useRef<HTMLInputElement>(null);
   const editBodyEditorRef = useRef<HTMLDivElement>(null);
@@ -166,6 +169,29 @@ export function SequencesTab() {
       setSaveResult("Failed to save");
     }
     setSaving(false);
+  };
+
+  const sendTest = async (sequenceId: string, phaseId: string) => {
+    if (!testEmail.trim()) return;
+    setTestingPhase(phaseId);
+    setTestResult(null);
+    try {
+      const res = await fetch(`/api/sequences/${sequenceId}/test`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phaseId, email: testEmail }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setTestResult("Test sent!");
+        setTimeout(() => setTestResult(null), 3000);
+      } else {
+        setTestResult(`Error: ${data.error}`);
+      }
+    } catch {
+      setTestResult("Failed to send test");
+    }
+    setTestingPhase(null);
   };
 
   const insertAtCursor = (
@@ -426,6 +452,24 @@ export function SequencesTab() {
                             </button>
                             {saveResult && (
                               <span className="text-sm text-gray-500">{saveResult}</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-200">
+                            <input
+                              value={testEmail}
+                              onChange={(e) => setTestEmail(e.target.value)}
+                              placeholder="your@email.com"
+                              className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black w-64"
+                            />
+                            <button
+                              onClick={() => sendTest(seq.id, phase.id)}
+                              disabled={testingPhase === phase.id || !testEmail.trim()}
+                              className="px-4 py-2 bg-white text-gray-900 text-sm font-medium rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                            >
+                              {testingPhase === phase.id ? "Sending..." : "Send Test"}
+                            </button>
+                            {testResult && (
+                              <span className="text-sm text-gray-500">{testResult}</span>
                             )}
                           </div>
                         </div>
