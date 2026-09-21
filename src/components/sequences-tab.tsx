@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { RichEditor, insertVariableIntoEditor } from "./rich-editor";
 
 type Phase = {
   id: string;
@@ -59,9 +60,12 @@ export function SequencesTab() {
   const [saving, setSaving] = useState(false);
   const [saveResult, setSaveResult] = useState<string | null>(null);
   const subjectRef = useRef<HTMLInputElement>(null);
-  const bodyRef = useRef<HTMLTextAreaElement>(null);
   const newSubjectRef = useRef<HTMLInputElement>(null);
-  const newBodyRef = useRef<HTMLTextAreaElement>(null);
+  const editBodyEditorRef = useRef<HTMLDivElement>(null);
+  const newBodyEditorRef = useRef<HTMLDivElement>(null);
+
+  const [lastFocused, setLastFocused] = useState<"subject" | "body">("body");
+  const [newLastFocused, setNewLastFocused] = useState<"subject" | "body">("body");
 
   const fetchSequences = useCallback(async () => {
     setLoading(true);
@@ -165,7 +169,7 @@ export function SequencesTab() {
   };
 
   const insertAtCursor = (
-    ref: React.RefObject<HTMLInputElement | HTMLTextAreaElement | null>,
+    ref: React.RefObject<HTMLInputElement | null>,
     value: string,
     setter: (v: string) => void,
     current: string
@@ -184,10 +188,6 @@ export function SequencesTab() {
       el.setSelectionRange(start + value.length, start + value.length);
     });
   };
-
-  // Track which field was last focused in the editor
-  const [lastFocused, setLastFocused] = useState<"subject" | "body">("body");
-  const [newLastFocused, setNewLastFocused] = useState<"subject" | "body">("body");
 
   if (loading) {
     return <div className="text-center py-12 text-gray-400">Loading sequences...</div>;
@@ -274,28 +274,34 @@ export function SequencesTab() {
                       if (newLastFocused === "subject") {
                         insertAtCursor(newSubjectRef, v, setPhaseSubject, phaseSubject);
                       } else {
-                        insertAtCursor(newBodyRef, v, setPhaseBody, phaseBody);
+                        insertVariableIntoEditor(newBodyEditorRef.current?.querySelector("[contenteditable]") || null, v);
+                        // Sync state after insert
+                        requestAnimationFrame(() => {
+                          const el = newBodyEditorRef.current?.querySelector("[contenteditable]");
+                          if (el) setPhaseBody(el.innerHTML);
+                        });
                       }
                     }}
                   />
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Subject</label>
                   <input
                     ref={newSubjectRef}
                     value={phaseSubject}
                     onChange={(e) => setPhaseSubject(e.target.value)}
                     onFocus={() => setNewLastFocused("subject")}
                     placeholder="Email subject"
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-black"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-black"
                   />
-                  <textarea
-                    ref={newBodyRef}
-                    value={phaseBody}
-                    onChange={(e) => setPhaseBody(e.target.value)}
-                    onFocus={() => setNewLastFocused("body")}
-                    placeholder="Email body"
-                    rows={6}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-black resize-y"
-                  />
-                  <div className="flex gap-2">
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Body</label>
+                  <div ref={newBodyEditorRef}>
+                    <RichEditor
+                      value={phaseBody}
+                      onChange={setPhaseBody}
+                      onFocus={() => setNewLastFocused("body")}
+                      placeholder="Start writing your email..."
+                    />
+                  </div>
+                  <div className="flex gap-2 mt-3">
                     <button
                       onClick={() => addPhase(seq.id)}
                       className="px-4 py-2 bg-black text-white text-sm font-medium rounded-lg hover:bg-gray-800"
@@ -379,7 +385,11 @@ export function SequencesTab() {
                               if (lastFocused === "subject") {
                                 insertAtCursor(subjectRef, v, setEditSubject, editSubject);
                               } else {
-                                insertAtCursor(bodyRef, v, setEditBody, editBody);
+                                insertVariableIntoEditor(editBodyEditorRef.current?.querySelector("[contenteditable]") || null, v);
+                                requestAnimationFrame(() => {
+                                  const el = editBodyEditorRef.current?.querySelector("[contenteditable]");
+                                  if (el) setEditBody(el.innerHTML);
+                                });
                               }
                             }}
                           />
@@ -392,15 +402,15 @@ export function SequencesTab() {
                             className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-black"
                           />
                           <label className="block text-xs font-medium text-gray-500 mb-1">Body</label>
-                          <textarea
-                            ref={bodyRef}
-                            value={editBody}
-                            onChange={(e) => setEditBody(e.target.value)}
-                            onFocus={() => setLastFocused("body")}
-                            rows={8}
-                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-black resize-y font-mono text-xs"
-                          />
-                          <div className="flex items-center gap-3">
+                          <div ref={editBodyEditorRef}>
+                            <RichEditor
+                              value={editBody}
+                              onChange={setEditBody}
+                              onFocus={() => setLastFocused("body")}
+                              placeholder="Start writing your email..."
+                            />
+                          </div>
+                          <div className="flex items-center gap-3 mt-3">
                             <button
                               onClick={() => savePhase(seq.id, phase.id)}
                               disabled={saving}
