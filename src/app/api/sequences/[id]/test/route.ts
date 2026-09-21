@@ -3,6 +3,7 @@ import { getDb } from "@/lib/db";
 import { phases } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { Resend } from "resend";
+import { htmlToText } from "@/lib/html-to-text";
 
 export async function POST(
   request: Request,
@@ -29,11 +30,13 @@ export async function POST(
     .replace(/{{company}}/g, "Acme Corp")
     .replace(/{{title}}/g, "CHRO");
 
-  const body = phase.body
-    .replace(/{{first_name}}/g, "Test")
-    .replace(/{{last_name}}/g, "User")
-    .replace(/{{company}}/g, "Acme Corp")
-    .replace(/{{title}}/g, "CHRO");
+  const body = htmlToText(
+    phase.body
+      .replace(/{{first_name}}/g, "Test")
+      .replace(/{{last_name}}/g, "User")
+      .replace(/{{company}}/g, "Acme Corp")
+      .replace(/{{title}}/g, "CHRO")
+  );
 
   const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -42,7 +45,7 @@ export async function POST(
       from: process.env.RESEND_FROM_EMAIL || "noreply@example.com",
       to: email,
       subject: `[TEST] ${subject}`,
-      html: body,
+      text: body,
     });
 
     return NextResponse.json({ success: true, id: result.data?.id });

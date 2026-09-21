@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { contacts, phases, sends, sequences } from "@/lib/db/schema";
-import { eq, and, notInArray, inArray, sql } from "drizzle-orm";
+import { eq, and, notInArray, inArray } from "drizzle-orm";
 import { Resend } from "resend";
+import { htmlToText } from "@/lib/html-to-text";
 
 function getResend() {
   return new Resend(process.env.RESEND_API_KEY);
@@ -33,7 +34,6 @@ export async function POST(
     return NextResponse.json({ error: "Phase not found" }, { status: 404 });
   }
 
-  // Get contacts already sent this phase
   const alreadySent = await getDb()
     .select({ contactId: sends.contactId })
     .from(sends)
@@ -41,7 +41,6 @@ export async function POST(
 
   const alreadySentIds = alreadySent.map((s) => s.contactId);
 
-  // Get eligible contacts: approved/enrolled, not opted_out, not replied
   const eligible = await getDb()
     .select()
     .from(contacts)
@@ -60,13 +59,16 @@ export async function POST(
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
   for (const contact of eligible) {
-    const personalizedBody = phase.body
-      .replace(/{{first_name}}/g, contact.firstName)
-      .replace(/{{last_name}}/g, contact.lastName)
-      .replace(/{{company}}/g, contact.companyName)
-      .replace(/{{title}}/g, contact.title);
+    const personalizedBody = htmlToText(
+      phase.body
+        .replace(/{{first_name}}/g, contact.firstName)
+        .replace(/{{last_name}}/g, contact.lastName)
+        .replace(/{{company}}/g, contact.companyName)
+        .replace(/{{title}}/g, contact.title)
+    );
 
     const optOutUrl = `${appUrl}/api/opt-out?id=${contact.id}`;
+    const textWithOptOut = `${personalizedBody}\n\n---\nUnsubscribe: ${optOutUrl}`;
 
     try {
       const result = await getResend().emails.send({
@@ -75,7 +77,7 @@ export async function POST(
         subject: phase.subject
           .replace(/{{first_name}}/g, contact.firstName)
           .replace(/{{company}}/g, contact.companyName),
-        html: `${personalizedBody}<br/><br/><p style="font-size:11px;color:#999;"><a href="${optOutUrl}">Unsubscribe</a></p>`,
+        text: textWithOptOut,
       });
 
       await getDb().insert(sends).values({
