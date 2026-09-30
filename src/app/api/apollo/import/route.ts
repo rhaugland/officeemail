@@ -37,7 +37,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Apollo API key not configured" }, { status: 500 });
   }
 
-  const response = await fetch("https://api.apollo.io/v1/mixed_people/search", {
+  const response = await fetch("https://api.apollo.io/v1/mixed_people/api_search", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
