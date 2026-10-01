@@ -62,10 +62,36 @@ export async function POST(
       text: body,
     });
 
-    // Log to messages if the recipient is an existing contact
-    if (contact) {
+    // Log to messages — create a contact for the test recipient if needed
+    let contactId = contact?.id;
+    if (!contactId) {
+      const [newContact] = await getDb()
+        .insert(contacts)
+        .values({
+          firstName: "Test",
+          lastName: "User",
+          email,
+          title: "CHRO",
+          companyName: "Test",
+        })
+        .onConflictDoNothing()
+        .returning({ id: contacts.id });
+      if (newContact) {
+        contactId = newContact.id;
+      } else {
+        // Was a race condition, fetch it
+        const [existing] = await getDb()
+          .select({ id: contacts.id })
+          .from(contacts)
+          .where(eq(contacts.email, email))
+          .limit(1);
+        contactId = existing?.id;
+      }
+    }
+
+    if (contactId) {
       await getDb().insert(messages).values({
-        contactId: contact.id,
+        contactId,
         direction: "outbound",
         subject: `[TEST] ${subject}`,
         body,
