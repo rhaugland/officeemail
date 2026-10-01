@@ -2,17 +2,20 @@ import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { messages, contacts } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { Resend } from "resend";
+
+function getResend() {
+  return new Resend(process.env.RESEND_API_KEY);
+}
 
 export async function POST(request: Request) {
   const payload = await request.json();
 
-  // Resend sends different event types — we care about inbound emails
-  // This handles the "email.received" webhook for inbound replies
   if (payload.type === "email.received") {
     const data = payload.data;
     const fromEmail = data.from?.toLowerCase();
+    const emailId = data.email_id;
     const subject = data.subject || "(no subject)";
-    const body = data.text || data.html || "";
 
     if (!fromEmail) {
       return NextResponse.json({ ok: true, skipped: "no from" });
@@ -29,12 +32,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, skipped: "unknown sender" });
     }
 
-    // Store the inbound message
+    // Fetch full email body from Resend API
+    let body = "";
+    if (emailId) {
+      try {
+        const full = await getResend().emails.receiving.get(emailId);
+        if (full.data) {
+          body = full.data.text || full.data.html || "";
+        }
+      } catch {
+        // If fetch fails, store what we have
+      }
+    }
+
     await getDb().insert(messages).values({
       contactId: contact.id,
       direction: "inbound",
       subject,
-      body,
+      body: body || "(email body unavailable)",
     });
 
     // Mark contact as replied
