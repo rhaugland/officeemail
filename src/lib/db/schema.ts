@@ -53,3 +53,18 @@ export const sends = pgTable("sends", {
   sentAt: timestamp("sent_at").defaultNow().notNull(),
   resendId: text("resend_id"),
 });
+
+export const messageDirectionEnum = pgEnum("message_direction", [
+  "inbound",
+  "outbound",
+]);
+
+export const messages = pgTable("messages", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  contactId: uuid("contact_id").notNull(),
+  direction: messageDirectionEnum("direction").notNull(),
+  subject: text("subject").notNull(),
+  body: text("body").notNull(),
+  resendId: text("resend_id"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});

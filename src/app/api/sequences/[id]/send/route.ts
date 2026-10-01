@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { contacts, phases, sends, sequences } from "@/lib/db/schema";
+import { contacts, phases, sends, sequences, messages } from "@/lib/db/schema";
 import { eq, and, notInArray, inArray } from "drizzle-orm";
 import { Resend } from "resend";
 import { htmlToText } from "@/lib/html-to-text";
@@ -83,6 +83,18 @@ export async function POST(
       await getDb().insert(sends).values({
         contactId: contact.id,
         phaseId: phase.id,
+        resendId: result.data?.id || null,
+      });
+
+      // Log as message for inbox thread
+      const personalizedSubject = phase.subject
+        .replace(/{{first_name}}/g, contact.firstName)
+        .replace(/{{company}}/g, contact.companyName);
+      await getDb().insert(messages).values({
+        contactId: contact.id,
+        direction: "outbound",
+        subject: personalizedSubject,
+        body: personalizedBody,
         resendId: result.data?.id || null,
       });
 

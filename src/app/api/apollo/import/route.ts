@@ -29,6 +29,20 @@ const TARGET_STATES = [
   "Utah",
 ];
 
+async function enrichPerson(apiKey: string, apolloId: string) {
+  const res = await fetch("https://api.apollo.io/v1/people/match", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Api-Key": apiKey,
+    },
+    body: JSON.stringify({ id: apolloId }),
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data.person || null;
+}
+
 export async function POST(request: Request) {
   const { page = 1 } = await request.json().catch(() => ({ page: 1 }));
 
@@ -37,6 +51,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Apollo API key not configured" }, { status: 500 });
   }
 
+  // Step 1: Search for people (returns IDs but no emails)
   const response = await fetch("https://api.apollo.io/v1/mixed_people/api_search", {
     method: "POST",
     headers: {
@@ -61,17 +76,37 @@ export async function POST(request: Request) {
   const people = data.people || [];
   let imported = 0;
   let skipped = 0;
+  let enrichFailed = 0;
 
+  // Step 2: Enrich each person to get email
   for (const person of people) {
-    if (!person.email) {
+    if (!person.id) {
       skipped++;
+      continue;
+    }
+
+    // Skip if we already have this Apollo contact (saves credits)
+    const alreadyHave = await getDb()
+      .select({ id: contacts.id })
+      .from(contacts)
+      .where(eq(contacts.apolloId, person.id))
+      .limit(1);
+
+    if (alreadyHave.length > 0) {
+      skipped++;
+      continue;
+    }
+
+    const enriched = await enrichPerson(apiKey, person.id);
+    if (!enriched?.email) {
+      enrichFailed++;
       continue;
     }
 
     const existing = await getDb()
       .select({ id: contacts.id })
       .from(contacts)
-      .where(eq(contacts.email, person.email))
+      .where(eq(contacts.email, enriched.email))
       .limit(1);
 
     if (existing.length > 0) {
@@ -80,24 +115,28 @@ export async function POST(request: Request) {
     }
 
     await getDb().insert(contacts).values({
-      firstName: person.first_name || "",
-      lastName: person.last_name || "",
-      email: person.email,
-      title: person.title || "",
-      companyName: person.organization?.name || "",
-      companySize: person.organization?.estimated_num_employees || null,
-      companyLocation: person.organization?.city
-        ? `${person.organization.city}, ${person.organization.state}`
+      firstName: enriched.first_name || "",
+      lastName: enriched.last_name || "",
+      email: enriched.email,
+      title: enriched.title || "",
+      companyName: enriched.organization?.name || "",
+      companySize: enriched.organization?.estimated_num_employees || null,
+      companyLocation: enriched.city
+        ? `${enriched.city}, ${enriched.state}`
         : "",
-      industry: person.organization?.industry || "",
-      apolloId: person.id || null,
+      industry: enriched.organization?.industry || "",
+      apolloId: enriched.id || null,
     });
     imported++;
+
+    // Rate limit enrichment calls
+    await new Promise((r) => setTimeout(r, 200));
   }
 
   return NextResponse.json({
     imported,
     skipped,
+    enrichFailed,
     total: people.length,
     pagination: data.pagination || {},
   });
