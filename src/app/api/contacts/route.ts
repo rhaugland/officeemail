@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { contacts } from "@/lib/db/schema";
-import { eq, sql, and, ne } from "drizzle-orm";
+import { eq, sql, and, ne, inArray } from "drizzle-orm";
+import { messages, sends } from "@/lib/db/schema";
 
 export async function GET(request: NextRequest) {
   const status = request.nextUrl.searchParams.get("status");
@@ -42,4 +43,19 @@ export async function PATCH(request: Request) {
     .returning();
 
   return NextResponse.json(updated);
+}
+
+export async function DELETE(request: Request) {
+  const { ids } = await request.json();
+
+  if (!ids || !Array.isArray(ids) || ids.length === 0) {
+    return NextResponse.json({ error: "ids array required" }, { status: 400 });
+  }
+
+  // Delete related messages and sends first
+  await getDb().delete(messages).where(inArray(messages.contactId, ids));
+  await getDb().delete(sends).where(inArray(sends.contactId, ids));
+  await getDb().delete(contacts).where(inArray(contacts.id, ids));
+
+  return NextResponse.json({ deleted: ids.length });
 }

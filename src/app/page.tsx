@@ -195,6 +195,8 @@ export default function Home() {
   const filteredContacts = useMemo(() => {
     const result = contacts.filter((c) => {
       if (statusFilter === "has_thread") return threadMap.has(c.id);
+      if (statusFilter === "enrolled") return c.status === "enrolled";
+      if (statusFilter === "unenrolled") return c.status !== "enrolled" && c.status !== "opted_out";
       if (statusFilter && c.status !== statusFilter) return false;
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
@@ -258,6 +260,25 @@ export default function Home() {
     });
     setSelected(new Set());
     fetchContacts();
+  };
+
+  const deleteContacts = async (ids: string[]) => {
+    if (ids.length === 0) return;
+    await fetch("/api/contacts", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids }),
+    });
+    if (selectedContactId && ids.includes(selectedContactId)) {
+      setSelectedContactId(null);
+    }
+    setSelected((prev) => {
+      const next = new Set(prev);
+      ids.forEach((id) => next.delete(id));
+      return next;
+    });
+    fetchContacts();
+    fetchThreads();
   };
 
   const toggleSelect = (id: string) => {
@@ -516,15 +537,20 @@ export default function Home() {
                     <>
                       <div className="fixed inset-0 z-10" onClick={() => setShowStatusFilter(false)} />
                       <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 min-w-[120px]">
-                        {["", "has_thread", "new", "approved", "rejected", "enrolled", "replied", "opted_out"].map((s) => (
+                        {[
+                          { value: "", label: "All" },
+                          { value: "has_thread", label: "Inbox" },
+                          { value: "enrolled", label: "Enrolled" },
+                          { value: "unenrolled", label: "Unenrolled" },
+                        ].map((s) => (
                           <button
-                            key={s}
-                            onClick={() => { setStatusFilter(s); setShowStatusFilter(false); }}
-                            className={`w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 capitalize ${
-                              statusFilter === s ? "font-medium text-black" : "text-gray-600"
+                            key={s.value}
+                            onClick={() => { setStatusFilter(s.value); setShowStatusFilter(false); }}
+                            className={`w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 ${
+                              statusFilter === s.value ? "font-medium text-black" : "text-gray-600"
                             }`}
                           >
-                            {s === "" ? "All" : s === "has_thread" ? "Inbox" : s}
+                            {s.label}
                           </button>
                         ))}
                       </div>
@@ -541,7 +567,10 @@ export default function Home() {
                     Approve
                   </button>
                   <button onClick={() => bulkUpdateStatus("rejected")} className="px-2 py-1 text-[10px] font-medium bg-white border border-gray-300 rounded">
-                    Remove
+                    Reject
+                  </button>
+                  <button onClick={() => { if (confirm(`Delete ${selected.size} contact(s)?`)) deleteContacts(Array.from(selected)); }} className="px-2 py-1 text-[10px] font-medium text-red-600 bg-white border border-red-200 rounded">
+                    Delete
                   </button>
                   <button onClick={() => setSelected(new Set())} className="text-[10px] text-gray-500 ml-auto">
                     Clear
@@ -677,6 +706,12 @@ export default function Home() {
                       </button>
                     </>
                   )}
+                  <button
+                    onClick={() => { if (confirm(`Delete ${selectedContact.firstName} ${selectedContact.lastName}?`)) deleteContacts([selectedContact.id]); }}
+                    className="px-3 py-1.5 text-xs font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50"
+                  >
+                    Delete
+                  </button>
                 </div>
               </div>
 
