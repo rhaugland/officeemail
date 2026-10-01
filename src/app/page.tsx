@@ -473,16 +473,6 @@ export default function Home() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center text-gray-400">
-        Loading...
-      </div>
-    );
-  }
-
-  // ── Render ───────────────────────────────────────────────────────────
-
   // Threads sorted by most recent, inbound replies first
   const sortedThreads = useMemo(() => {
     return [...threads].sort((a, b) => {
@@ -492,6 +482,16 @@ export default function Home() {
       return new Date(b.messages[0].createdAt).getTime() - new Date(a.messages[0].createdAt).getTime();
     });
   }, [threads]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-gray-400">
+        Loading...
+      </div>
+    );
+  }
+
+  // ── Render ───────────────────────────────────────────────────────────
 
   return (
     <div className="h-screen flex flex-col">
