@@ -186,8 +186,15 @@ export default function Home() {
 
   // ── Derived data ──
 
+  const threadMap = useMemo(() => {
+    const map = new Map<string, Thread>();
+    for (const t of threads) map.set(t.contact.id, t);
+    return map;
+  }, [threads]);
+
   const filteredContacts = useMemo(() => {
-    return contacts.filter((c) => {
+    const result = contacts.filter((c) => {
+      if (statusFilter === "has_thread") return threadMap.has(c.id);
       if (statusFilter && c.status !== statusFilter) return false;
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
@@ -201,7 +208,20 @@ export default function Home() {
       }
       return true;
     });
-  }, [contacts, searchQuery, statusFilter]);
+
+    // Sort: inbound replies first, then outbound threads, then rest
+    result.sort((a, b) => {
+      const tA = threadMap.get(a.id);
+      const tB = threadMap.get(b.id);
+      const scoreA = tA?.messages.some((m) => m.direction === "inbound") ? 2 : tA ? 1 : 0;
+      const scoreB = tB?.messages.some((m) => m.direction === "inbound") ? 2 : tB ? 1 : 0;
+      if (scoreA !== scoreB) return scoreB - scoreA;
+      if (tA && tB) return new Date(tB.messages[0].createdAt).getTime() - new Date(tA.messages[0].createdAt).getTime();
+      return 0;
+    });
+
+    return result;
+  }, [contacts, searchQuery, statusFilter, threadMap]);
 
   const selectedContact = useMemo(
     () => contacts.find((c) => c.id === selectedContactId) || null,
@@ -217,12 +237,6 @@ export default function Home() {
     () => sequences.find((s) => s.id === selectedSequenceId) || null,
     [sequences, selectedSequenceId]
   );
-
-  const threadMap = useMemo(() => {
-    const map = new Map<string, Thread>();
-    for (const t of threads) map.set(t.contact.id, t);
-    return map;
-  }, [threads]);
 
   // ── Contact actions ──
 
@@ -502,7 +516,7 @@ export default function Home() {
                     <>
                       <div className="fixed inset-0 z-10" onClick={() => setShowStatusFilter(false)} />
                       <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 min-w-[120px]">
-                        {["", "new", "approved", "rejected", "enrolled", "replied", "opted_out"].map((s) => (
+                        {["", "has_thread", "new", "approved", "rejected", "enrolled", "replied", "opted_out"].map((s) => (
                           <button
                             key={s}
                             onClick={() => { setStatusFilter(s); setShowStatusFilter(false); }}
@@ -510,7 +524,7 @@ export default function Home() {
                               statusFilter === s ? "font-medium text-black" : "text-gray-600"
                             }`}
                           >
-                            {s || "All"}
+                            {s === "" ? "All" : s === "has_thread" ? "Inbox" : s}
                           </button>
                         ))}
                       </div>
@@ -569,6 +583,12 @@ export default function Home() {
                         <div className="text-[11px] text-gray-500 truncate pl-3.5">
                           {c.title} · {c.companyName}
                         </div>
+                        {thread && (
+                          <div className="text-[10px] text-gray-400 truncate pl-3.5 mt-0.5">
+                            {thread.messages[0].direction === "inbound" ? "" : "You: "}
+                            {thread.messages[0].body.slice(0, 50)}
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
