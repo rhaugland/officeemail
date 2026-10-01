@@ -116,12 +116,12 @@ const VARIABLES = [
 // ── Main Page ──────────────────────────────────────────────────────────
 
 export default function Home() {
-  const [sidebarView, setSidebarView] = useState<SidebarView>("contacts");
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [threads, setThreads] = useState<Thread[]>([]);
   const [sequences, setSequences] = useState<Sequence[]>([]);
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [panel, setPanel] = useState<"contacts" | "sequences" | null>(null);
 
   // Contact state
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
@@ -483,9 +483,19 @@ export default function Home() {
 
   // ── Render ───────────────────────────────────────────────────────────
 
+  // Threads sorted by most recent, inbound replies first
+  const sortedThreads = useMemo(() => {
+    return [...threads].sort((a, b) => {
+      const aInbound = a.messages.some((m) => m.direction === "inbound") ? 1 : 0;
+      const bInbound = b.messages.some((m) => m.direction === "inbound") ? 1 : 0;
+      if (aInbound !== bInbound) return bInbound - aInbound;
+      return new Date(b.messages[0].createdAt).getTime() - new Date(a.messages[0].createdAt).getTime();
+    });
+  }, [threads]);
+
   return (
     <div className="h-screen flex flex-col">
-      {/* Header with dashboard */}
+      {/* Header */}
       <header className="border-b border-gray-200 bg-white flex-shrink-0">
         <div className="flex items-center px-4 h-14">
           <h1 className="text-lg font-semibold tracking-tight">OfficeEmail</h1>
@@ -518,480 +528,296 @@ export default function Home() {
             </div>
           )}
           <div className="ml-auto flex items-center gap-2">
-            {importResult && <span className="text-xs text-gray-500">{importResult}</span>}
             <button
-              onClick={importFromApollo}
-              disabled={importing}
-              className="px-3 py-1.5 text-gray-500 text-xs font-medium border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+              onClick={() => setPanel(panel === "contacts" ? null : "contacts")}
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${panel === "contacts" ? "bg-black text-white" : "text-gray-500 border border-gray-200 hover:bg-gray-50"}`}
             >
-              {importing ? "..." : "Import"}
+              Contacts ({contacts.length})
+            </button>
+            <button
+              onClick={() => setPanel(panel === "sequences" ? null : "sequences")}
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${panel === "sequences" ? "bg-black text-white" : "text-gray-500 border border-gray-200 hover:bg-gray-50"}`}
+            >
+              Sequences ({sequences.length})
             </button>
           </div>
         </div>
       </header>
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* ── Sidebar ── */}
+      <div className="flex flex-1 overflow-hidden relative">
+        {/* ── Message Sidebar ── */}
         <div className="w-[320px] border-r border-gray-200 bg-white flex flex-col flex-shrink-0">
-          {/* Sidebar nav */}
-          <div className="flex border-b border-gray-200">
-            <button
-              onClick={() => { setSidebarView("contacts"); setSelectedSequenceId(null); }}
-              className={`flex-1 py-2.5 text-xs font-medium flex items-center justify-center gap-1.5 transition-colors ${
-                sidebarView === "contacts"
-                  ? "bg-black text-white"
-                  : "text-gray-500 hover:bg-gray-50"
-              }`}
-            >
-              <PersonIcon active={sidebarView === "contacts"} />
-              Contacts ({contacts.length})
-            </button>
-            <button
-              onClick={() => { setSidebarView("sequences"); setSelectedContactId(null); }}
-              className={`flex-1 py-2.5 text-xs font-medium flex items-center justify-center gap-1.5 transition-colors ${
-                sidebarView === "sequences"
-                  ? "bg-black text-white"
-                  : "text-gray-500 hover:bg-gray-50"
-              }`}
-            >
-              <SequenceIcon active={sidebarView === "sequences"} />
-              Sequences ({sequences.length})
-            </button>
+          <div className="px-3 py-2.5 border-b border-gray-100">
+            <div className="text-xs font-medium text-gray-400 uppercase tracking-wide">Messages</div>
           </div>
+          <div className="flex-1 overflow-y-auto">
+            {sortedThreads.length === 0 ? (
+              <div className="px-4 py-12 text-center text-gray-400 text-xs">
+                No conversations yet. Messages will appear here as emails are sent.
+              </div>
+            ) : (
+              sortedThreads.map((thread) => {
+                const latest = thread.messages[0];
+                const hasInbound = thread.messages.some((m) => m.direction === "inbound");
+                const isActive = selectedContactId === thread.contact.id;
 
-          {sidebarView === "contacts" ? (
-            <>
-              {/* Search + filter */}
-              <div className="p-2 border-b border-gray-100 flex gap-1.5">
-                <input
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search contacts..."
-                  className="flex-1 px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-gray-400"
-                />
-                <div className="relative">
+                return (
                   <button
-                    onClick={() => setShowStatusFilter(!showStatusFilter)}
-                    className={`p-1.5 rounded-lg border transition-colors ${
-                      statusFilter ? "border-black bg-black text-white" : "border-gray-200 text-gray-400 hover:bg-gray-50"
-                    }`}
+                    key={thread.contact.id}
+                    onClick={() => { setSelectedContactId(thread.contact.id); setSelectedSequenceId(null); setPanel(null); }}
+                    className={`w-full text-left px-3 py-3 border-b border-gray-50 transition-colors ${isActive ? "bg-gray-100" : "hover:bg-gray-50"}`}
                   >
-                    <FilterIcon />
+                    <div className="flex items-center justify-between mb-0.5">
+                      <span className="text-sm font-medium truncate flex items-center gap-1.5">
+                        {hasInbound && <span className="w-2 h-2 rounded-full bg-black flex-shrink-0" />}
+                        {thread.contact.firstName} {thread.contact.lastName}
+                      </span>
+                      <span className="text-[10px] text-gray-400 flex-shrink-0 ml-2">{formatTime(latest.createdAt)}</span>
+                    </div>
+                    <div className="text-[11px] text-gray-500 truncate">{thread.contact.companyName}</div>
+                    <div className="text-[10px] text-gray-400 truncate mt-0.5">
+                      {latest.direction === "inbound" ? "" : "You: "}
+                      {latest.body.slice(0, 60)}
+                    </div>
                   </button>
-                  {showStatusFilter && (
-                    <>
-                      <div className="fixed inset-0 z-10" onClick={() => setShowStatusFilter(false)} />
-                      <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 min-w-[120px]">
-                        {[
-                          { value: "", label: "All" },
-                          { value: "has_thread", label: "Inbox" },
-                          { value: "enrolled", label: "Enrolled" },
-                          { value: "unenrolled", label: "Unenrolled" },
-                        ].map((s) => (
-                          <button
-                            key={s.value}
-                            onClick={() => { setStatusFilter(s.value); setShowStatusFilter(false); }}
-                            className={`w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 ${
-                              statusFilter === s.value ? "font-medium text-black" : "text-gray-600"
-                            }`}
-                          >
-                            {s.label}
-                          </button>
-                        ))}
-                      </div>
-                    </>
-                  )}
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        {/* ── Main Area: Thread or Empty ── */}
+        <div className="flex-1 flex flex-col overflow-hidden bg-gray-50">
+          {selectedContact && selectedThread ? (
+            <>
+              {/* Contact header */}
+              <div className="px-6 py-3 bg-white border-b border-gray-200 flex items-center justify-between flex-shrink-0">
+                <div>
+                  <div className="font-semibold text-sm">{selectedContact.firstName} {selectedContact.lastName}</div>
+                  <div className="text-xs text-gray-500">
+                    {selectedContact.email} · {selectedContact.title} · {selectedContact.companyName}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium capitalize text-white ${STATUS_COLORS[selectedContact.status]}`}>
+                    {selectedContact.status === "opted_out" ? "Opted Out" : selectedContact.status}
+                  </span>
+                  <button
+                    onClick={() => { if (confirm(`Delete ${selectedContact.firstName} ${selectedContact.lastName}?`)) deleteContacts([selectedContact.id]); }}
+                    className="px-2 py-1 text-[10px] font-medium text-red-500 hover:text-red-700"
+                  >
+                    Delete
+                  </button>
                 </div>
               </div>
 
-              {/* Bulk actions */}
-              {selected.size > 0 && (
-                <div className="px-3 py-2 bg-gray-50 border-b border-gray-100 flex items-center gap-2">
-                  <span className="text-xs font-medium">{selected.size} sel.</span>
-                  <button onClick={() => bulkUpdateStatus("approved")} className="px-2 py-1 text-[10px] font-medium bg-black text-white rounded">
-                    Approve
-                  </button>
-                  <button onClick={() => bulkUpdateStatus("rejected")} className="px-2 py-1 text-[10px] font-medium bg-white border border-gray-300 rounded">
-                    Reject
-                  </button>
-                  <button onClick={() => { if (confirm(`Delete ${selected.size} contact(s)?`)) deleteContacts(Array.from(selected)); }} className="px-2 py-1 text-[10px] font-medium text-red-600 bg-white border border-red-200 rounded">
-                    Delete
-                  </button>
-                  <button onClick={() => setSelected(new Set())} className="text-[10px] text-gray-500 ml-auto">
-                    Clear
-                  </button>
-                </div>
-              )}
-
-              {/* Contact list */}
-              <div className="flex-1 overflow-y-auto">
-                {filteredContacts.map((c) => {
-                  const thread = threadMap.get(c.id);
-                  const hasReply = thread?.messages.some((m) => m.direction === "inbound");
-                  const isActive = selectedContactId === c.id;
-
+              {/* Messages */}
+              <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
+                {[...selectedThread.messages].reverse().map((msg) => {
+                  const isOutbound = msg.direction === "outbound";
+                  const isExpanded = expandedMessages.has(msg.id);
                   return (
-                    <div
-                      key={c.id}
-                      className={`flex items-center gap-2 px-3 py-2.5 border-b border-gray-50 cursor-pointer transition-colors ${
-                        isActive ? "bg-gray-100" : "hover:bg-gray-50"
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selected.has(c.id)}
-                        onChange={() => toggleSelect(c.id)}
-                        className="w-3.5 h-3.5 rounded border-gray-300 accent-black flex-shrink-0"
-                      />
-                      <div
-                        className="flex-1 min-w-0"
-                        onClick={() => { setSelectedContactId(c.id); setSidebarView("contacts"); }}
-                      >
-                        <div className="flex items-center gap-1.5">
-                          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${STATUS_DOT[c.status] || "bg-gray-300"}`} />
-                          {hasReply && <span className="w-1.5 h-1.5 rounded-full bg-black flex-shrink-0" />}
-                          <span className="text-sm font-medium truncate">
-                            {c.firstName} {c.lastName}
-                          </span>
+                    <div key={msg.id} className={`flex ${isOutbound ? "justify-end" : "justify-start"}`}>
+                      {isOutbound ? (
+                        <div className="max-w-[65%]">
+                          <button onClick={() => toggleExpand(msg.id)} className="w-full text-left rounded-lg px-4 py-2 bg-white border border-gray-200 text-gray-600 hover:bg-gray-100 transition-colors">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[11px] text-gray-400">You · {formatTime(msg.createdAt)}</span>
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`text-gray-400 transition-transform ${isExpanded ? "rotate-180" : ""}`}><polyline points="6 9 12 15 18 9" /></svg>
+                            </div>
+                            <div className="text-xs font-medium text-gray-500 mt-1">{msg.subject}</div>
+                            {!isExpanded && <div className="text-[11px] text-gray-400 mt-1 truncate">{msg.body.slice(0, 60)}...</div>}
+                          </button>
+                          {isExpanded && <div className="mt-1 rounded-lg px-4 py-3 bg-white border border-gray-200 text-sm text-gray-700 whitespace-pre-wrap">{msg.body}</div>}
                         </div>
-                        <div className="text-[11px] text-gray-500 truncate pl-3.5">
-                          {c.title} · {c.companyName}
+                      ) : (
+                        <div className="max-w-[65%] rounded-lg px-4 py-3 bg-black text-white">
+                          <div className="text-[11px] opacity-60 mb-1">{selectedContact.firstName} · {formatTime(msg.createdAt)}</div>
+                          <div className="text-sm whitespace-pre-wrap">{msg.body}</div>
                         </div>
-                        {thread && (
-                          <div className="text-[10px] text-gray-400 truncate pl-3.5 mt-0.5">
-                            {thread.messages[0].direction === "inbound" ? "" : "You: "}
-                            {thread.messages[0].body.slice(0, 50)}
-                          </div>
-                        )}
-                      </div>
+                      )}
                     </div>
                   );
                 })}
               </div>
-            </>
-          ) : (
-            <>
-              {/* Sequence list */}
-              <div className="p-2 border-b border-gray-100">
-                {showNewSequence ? (
-                  <div className="flex gap-1.5">
-                    <input
-                      value={newSeqName}
-                      onChange={(e) => setNewSeqName(e.target.value)}
-                      placeholder="Sequence name..."
-                      className="flex-1 px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none"
-                      onKeyDown={(e) => e.key === "Enter" && createSequence()}
-                    />
-                    <button onClick={createSequence} className="px-2.5 py-1.5 bg-black text-white text-xs rounded-lg">Create</button>
-                    <button onClick={() => setShowNewSequence(false)} className="px-2 py-1.5 text-xs text-gray-500">X</button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => setShowNewSequence(true)}
-                    className="w-full py-1.5 text-xs font-medium text-gray-600 border border-dashed border-gray-300 rounded-lg hover:bg-gray-50"
-                  >
-                    + New Sequence
-                  </button>
-                )}
-              </div>
-              <div className="flex-1 overflow-y-auto">
-                {sequences.map((seq) => (
-                  <button
-                    key={seq.id}
-                    onClick={() => { setSelectedSequenceId(seq.id); setSelectedContactId(null); }}
-                    className={`w-full text-left px-3 py-3 border-b border-gray-50 transition-colors ${
-                      selectedSequenceId === seq.id ? "bg-gray-100" : "hover:bg-gray-50"
-                    }`}
-                  >
-                    <div className="text-sm font-medium">{seq.name}</div>
-                    <div className="text-[11px] text-gray-500">
-                      {seq.phases.length} phase{seq.phases.length !== 1 ? "s" : ""} · {seq.dailyLimit}/day
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
 
-        {/* ── Main Area ── */}
-        <div className="flex-1 flex flex-col overflow-hidden bg-gray-50">
-          {selectedContact ? (
-            // ── Contact Detail ──
-            <>
-              {/* Contact header */}
-              <div className="px-6 py-4 bg-white border-b border-gray-200 flex items-center justify-between flex-shrink-0">
-                <div>
-                  <div className="font-semibold">
-                    {selectedContact.firstName} {selectedContact.lastName}
-                  </div>
-                  <div className="text-sm text-gray-500">
-                    {selectedContact.email} · {selectedContact.title} · {selectedContact.companyName}
-                    {selectedContact.companySize && ` (${selectedContact.companySize})`}
-                    {selectedContact.companyLocation && ` · ${selectedContact.companyLocation}`}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize text-white ${STATUS_COLORS[selectedContact.status]}`}>
-                    {selectedContact.status === "opted_out" ? "Opted Out" : selectedContact.status}
-                  </span>
-                  {selectedContact.status === "new" && (
-                    <>
-                      <button
-                        onClick={() => updateStatus(selectedContact.id, "approved")}
-                        className="px-3 py-1.5 text-xs font-medium bg-black text-white rounded-lg hover:bg-gray-800"
-                      >
-                        Approve
-                      </button>
-                      <button
-                        onClick={() => updateStatus(selectedContact.id, "rejected")}
-                        className="px-3 py-1.5 text-xs font-medium border border-gray-300 rounded-lg hover:bg-gray-50"
-                      >
-                        Reject
-                      </button>
-                    </>
-                  )}
-                  <button
-                    onClick={() => { if (confirm(`Delete ${selectedContact.firstName} ${selectedContact.lastName}?`)) deleteContacts([selectedContact.id]); }}
-                    className="px-3 py-1.5 text-xs font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-
-              {/* Thread */}
-              <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
-                {selectedThread ? (
-                  [...selectedThread.messages].reverse().map((msg) => {
-                    const isOutbound = msg.direction === "outbound";
-                    const isExpanded = expandedMessages.has(msg.id);
-
-                    return (
-                      <div key={msg.id} className={`flex ${isOutbound ? "justify-end" : "justify-start"}`}>
-                        {isOutbound ? (
-                          <div className="max-w-[65%]">
-                            <button
-                              onClick={() => toggleExpand(msg.id)}
-                              className="w-full text-left rounded-lg px-4 py-2 bg-white border border-gray-200 text-gray-600 hover:bg-gray-100 transition-colors"
-                            >
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="text-[11px] text-gray-400">You · {formatTime(msg.createdAt)}</span>
-                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`text-gray-400 transition-transform ${isExpanded ? "rotate-180" : ""}`}>
-                                  <polyline points="6 9 12 15 18 9" />
-                                </svg>
-                              </div>
-                              <div className="text-xs font-medium text-gray-500 mt-1">{msg.subject}</div>
-                              {!isExpanded && (
-                                <div className="text-[11px] text-gray-400 mt-1 truncate">{msg.body.slice(0, 60)}...</div>
-                              )}
-                            </button>
-                            {isExpanded && (
-                              <div className="mt-1 rounded-lg px-4 py-3 bg-white border border-gray-200 text-sm text-gray-700 whitespace-pre-wrap">
-                                {msg.body}
-                              </div>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="max-w-[65%] rounded-lg px-4 py-3 bg-black text-white">
-                            <div className="text-[11px] opacity-60 mb-1">
-                              {selectedContact.firstName} · {formatTime(msg.createdAt)}
-                            </div>
-                            <div className="text-sm whitespace-pre-wrap">{msg.body}</div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })
-                ) : (
-                  <div className="text-center text-gray-400 text-sm py-12">
-                    No messages yet with this contact.
-                  </div>
-                )}
-              </div>
-
-              {/* Reply box */}
+              {/* Reply */}
               <div className="border-t border-gray-200 bg-white px-6 py-3 flex-shrink-0">
                 <div className="flex gap-2">
-                  <textarea
-                    value={replyBody}
-                    onChange={(e) => setReplyBody(e.target.value)}
-                    placeholder="Write a reply..."
-                    rows={2}
-                    className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:border-gray-400"
-                  />
-                  <button
-                    onClick={sendReply}
-                    disabled={sendingReply || !replyBody.trim()}
-                    className="px-4 py-2 bg-black text-white text-sm font-medium rounded-lg hover:bg-gray-800 disabled:opacity-50 self-end"
-                  >
+                  <textarea value={replyBody} onChange={(e) => setReplyBody(e.target.value)} placeholder="Write a reply..." rows={2} className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:border-gray-400" />
+                  <button onClick={sendReply} disabled={sendingReply || !replyBody.trim()} className="px-4 py-2 bg-black text-white text-sm font-medium rounded-lg hover:bg-gray-800 disabled:opacity-50 self-end">
                     {sendingReply ? "..." : "Send"}
                   </button>
                 </div>
               </div>
             </>
-          ) : selectedSequence ? (
-            // ── Sequence Detail ──
-            <div className="flex-1 overflow-y-auto">
-              <div className="px-6 py-4 bg-white border-b border-gray-200 flex items-center justify-between">
-                <div>
-                  <div className="font-semibold">{selectedSequence.name}</div>
-                  <div className="text-sm text-gray-500">
-                    {selectedSequence.phases.length} phases · {selectedSequence.dailyLimit}/day limit · Auto-sends weekdays at 8am CT
-                  </div>
-                </div>
-                {sendResult && <span className="text-xs text-gray-500">{sendResult}</span>}
-              </div>
-
-              {/* Target states */}
-              <div className="px-6 py-3 bg-gray-50 border-b border-gray-200">
-                <div className="text-[10px] uppercase tracking-wide text-gray-400 mb-1.5">Targeting</div>
-                <div className="flex flex-wrap gap-1.5">
-                  {["MN", "IA", "MI", "WI", "OH", "IN", "SD", "ND", "CO", "AZ", "NV", "UT"].map((s) => (
-                    <span key={s} className="px-2 py-0.5 text-[11px] font-medium bg-white border border-gray-200 rounded-full text-gray-600">
-                      {s}
-                    </span>
-                  ))}
-                  <span className="px-2 py-0.5 text-[11px] text-gray-400">
-                    CHROs/CPOs · 25-2,500 employees
-                  </span>
-                </div>
-              </div>
-
-              <div className="p-6 space-y-4">
-                {selectedSequence.phases.map((phase) => (
-                  <div key={phase.id} className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-                    <div className="px-4 py-3 flex items-center justify-between">
-                      <button onClick={() => {
-                        if (expandedPhase === phase.id) { setExpandedPhase(null); return; }
-                        setExpandedPhase(phase.id);
-                        setEditSubject(phase.subject);
-                        setEditBody(phase.body);
-                        setEditDelayDays(phase.delayDays);
-                      }} className="flex-1 text-left">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-mono bg-gray-100 px-2 py-0.5 rounded">P{phase.phaseNumber}</span>
-                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${phase.isActive ? "bg-black text-white" : "bg-gray-100 text-gray-500"}`}>
-                            {phase.isActive ? "Active" : "Off"}
-                          </span>
-                          {phase.phaseNumber > 1 && (
-                            <span className="text-[11px] text-gray-400">{phase.delayDays}d delay</span>
-                          )}
-                          <span className="text-[11px] text-gray-400">{phase.sentCount} sent</span>
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`text-gray-400 transition-transform ${expandedPhase === phase.id ? "rotate-180" : ""}`}>
-                            <polyline points="6 9 12 15 18 9" />
-                          </svg>
-                        </div>
-                        <p className="text-sm font-medium mt-1">{phase.subject}</p>
-                      </button>
-                      <div className="flex gap-2 ml-3">
-                        <button onClick={() => togglePhase(phase.id, phase.isActive)} className="px-2.5 py-1 text-[11px] font-medium rounded border border-gray-300 text-gray-600 hover:bg-gray-50">
-                          {phase.isActive ? "Deactivate" : "Activate"}
-                        </button>
-                        {phase.isActive && (
-                          <button
-                            onClick={() => sendPhase(phase.id)}
-                            disabled={sending === phase.id}
-                            className="px-2.5 py-1 text-[11px] font-medium rounded bg-black text-white hover:bg-gray-800 disabled:opacity-50"
-                          >
-                            {sending === phase.id ? "..." : `Send (${phase.eligibleCount}/${selectedSequence.dailyLimit})`}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    {expandedPhase === phase.id && (
-                      <div className="px-4 pb-4 border-t border-gray-100 pt-3 bg-gray-50/50">
-                        <div className="flex items-center gap-1.5 mb-2">
-                          <span className="text-[10px] text-gray-400">Insert:</span>
-                          {VARIABLES.map((v) => (
-                            <button key={v.value} onClick={() => insertAtCursor(v.value)} className="px-1.5 py-0.5 text-[10px] font-mono bg-gray-100 text-gray-700 rounded hover:bg-gray-200">
-                              {v.label}
-                            </button>
-                          ))}
-                        </div>
-                        <input
-                          ref={subjectRef}
-                          value={editSubject}
-                          onChange={(e) => setEditSubject(e.target.value)}
-                          onFocus={() => setLastFocused("subject")}
-                          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-black"
-                        />
-                        <div ref={editBodyEditorRef}>
-                          <RichEditor value={editBody} onChange={setEditBody} onFocus={() => setLastFocused("body")} placeholder="Email body..." />
-                        </div>
-                        {phase.phaseNumber > 1 && (
-                          <div className="flex items-center gap-2 mt-3">
-                            <label className="text-xs text-gray-500">Send</label>
-                            <input
-                              type="number"
-                              min={0}
-                              value={editDelayDays}
-                              onChange={(e) => setEditDelayDays(parseInt(e.target.value) || 0)}
-                              className="w-16 px-2 py-1 border border-gray-200 rounded text-xs text-center focus:outline-none"
-                            />
-                            <label className="text-xs text-gray-500">days after previous phase</label>
-                          </div>
-                        )}
-                        <div className="flex items-center gap-2 mt-3">
-                          <button onClick={() => savePhase(phase.id)} disabled={saving} className="px-3 py-1.5 bg-black text-white text-xs font-medium rounded-lg disabled:opacity-50">
-                            {saving ? "..." : "Save"}
-                          </button>
-                          <button onClick={() => setExpandedPhase(null)} className="px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-100 rounded-lg">Cancel</button>
-                        </div>
-                        <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-200">
-                          <input
-                            value={testEmail}
-                            onChange={(e) => setTestEmail(e.target.value)}
-                            placeholder="test@email.com"
-                            className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none w-48"
-                          />
-                          <button
-                            onClick={() => sendTest(phase.id)}
-                            disabled={testingPhase === phase.id || !testEmail.trim()}
-                            className="px-3 py-1.5 text-xs font-medium border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
-                          >
-                            {testingPhase === phase.id ? "..." : "Send Test"}
-                          </button>
-                          {testResult && <span className="text-xs text-gray-500">{testResult}</span>}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
-
-                {/* Add phase */}
-                {addingPhase ? (
-                  <div className="bg-white rounded-lg border border-gray-200 p-4">
-                    <input
-                      value={phaseSubject}
-                      onChange={(e) => setPhaseSubject(e.target.value)}
-                      placeholder="Subject line"
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm mb-2 focus:outline-none"
-                    />
-                    <RichEditor value={phaseBody} onChange={setPhaseBody} placeholder="Email body..." />
-                    <div className="flex gap-2 mt-2">
-                      <button onClick={addPhaseToSequence} className="px-3 py-1.5 bg-black text-white text-xs font-medium rounded-lg">Add</button>
-                      <button onClick={() => setAddingPhase(false)} className="px-3 py-1.5 text-xs text-gray-500">Cancel</button>
-                    </div>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => setAddingPhase(true)}
-                    className="w-full py-2.5 text-xs font-medium text-gray-500 border border-dashed border-gray-300 rounded-lg hover:bg-white"
-                  >
-                    + Add Phase
-                  </button>
-                )}
-              </div>
-            </div>
           ) : (
-            // ── Empty state ──
             <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">
-              Select a contact or sequence to get started
+              Select a conversation to view messages
             </div>
           )}
         </div>
+
+        {/* ── Slide-over Panels ── */}
+        {panel && (
+          <>
+            <div className="absolute inset-0 bg-black/20 z-30" onClick={() => setPanel(null)} />
+            <div className="absolute right-0 top-0 bottom-0 w-[500px] bg-white border-l border-gray-200 z-40 flex flex-col shadow-xl">
+              {panel === "contacts" ? (
+                <>
+                  <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className="font-semibold text-sm">Contacts</span>
+                      <div className="relative">
+                        <button onClick={() => setShowStatusFilter(!showStatusFilter)} className={`p-1 rounded border text-[10px] ${statusFilter ? "border-black bg-black text-white" : "border-gray-200 text-gray-400"}`}>
+                          <FilterIcon />
+                        </button>
+                        {showStatusFilter && (
+                          <>
+                            <div className="fixed inset-0 z-10" onClick={() => setShowStatusFilter(false)} />
+                            <div className="absolute left-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 min-w-[120px]">
+                              {[{ value: "", label: "All" }, { value: "has_thread", label: "Inbox" }, { value: "enrolled", label: "Enrolled" }, { value: "unenrolled", label: "Unenrolled" }].map((s) => (
+                                <button key={s.value} onClick={() => { setStatusFilter(s.value); setShowStatusFilter(false); }} className={`w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 ${statusFilter === s.value ? "font-medium text-black" : "text-gray-600"}`}>{s.label}</button>
+                              ))}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                      {importResult && <span className="text-[10px] text-gray-500">{importResult}</span>}
+                      <button onClick={importFromApollo} disabled={importing} className="px-2 py-1 text-[10px] font-medium text-gray-500 border border-gray-200 rounded hover:bg-gray-50 disabled:opacity-50">
+                        {importing ? "..." : "Import"}
+                      </button>
+                    </div>
+                    <button onClick={() => setPanel(null)} className="text-gray-400 hover:text-gray-600 text-lg">&times;</button>
+                  </div>
+                  <div className="p-2 border-b border-gray-100">
+                    <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search..." className="w-full px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none" />
+                  </div>
+                  {selected.size > 0 && (
+                    <div className="px-3 py-2 bg-gray-50 border-b border-gray-100 flex items-center gap-2">
+                      <span className="text-xs font-medium">{selected.size} sel.</span>
+                      <button onClick={() => bulkUpdateStatus("approved")} className="px-2 py-1 text-[10px] font-medium bg-black text-white rounded">Approve</button>
+                      <button onClick={() => bulkUpdateStatus("rejected")} className="px-2 py-1 text-[10px] font-medium bg-white border border-gray-300 rounded">Reject</button>
+                      <button onClick={() => { if (confirm(`Delete ${selected.size} contact(s)?`)) deleteContacts(Array.from(selected)); }} className="px-2 py-1 text-[10px] font-medium text-red-600 bg-white border border-red-200 rounded">Delete</button>
+                      <button onClick={() => setSelected(new Set())} className="text-[10px] text-gray-500 ml-auto">Clear</button>
+                    </div>
+                  )}
+                  <div className="flex-1 overflow-y-auto">
+                    {filteredContacts.map((c) => (
+                      <div key={c.id} className="flex items-center gap-2 px-3 py-2 border-b border-gray-50 hover:bg-gray-50">
+                        <input type="checkbox" checked={selected.has(c.id)} onChange={() => toggleSelect(c.id)} className="w-3.5 h-3.5 accent-black" />
+                        <div className="flex-1 min-w-0 cursor-pointer" onClick={() => { setSelectedContactId(c.id); setSelectedSequenceId(null); setPanel(null); }}>
+                          <div className="flex items-center gap-1.5">
+                            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${STATUS_DOT[c.status] || "bg-gray-300"}`} />
+                            <span className="text-sm font-medium truncate">{c.firstName} {c.lastName}</span>
+                            <span className="text-[10px] text-gray-400 ml-auto flex-shrink-0">{c.status}</span>
+                          </div>
+                          <div className="text-[11px] text-gray-500 truncate pl-3.5">{c.title} · {c.companyName}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+                    <span className="font-semibold text-sm">Sequences</span>
+                    <button onClick={() => setPanel(null)} className="text-gray-400 hover:text-gray-600 text-lg">&times;</button>
+                  </div>
+                  <div className="flex-1 overflow-y-auto">
+                    <div className="p-3 border-b border-gray-100">
+                      {showNewSequence ? (
+                        <div className="flex gap-1.5">
+                          <input value={newSeqName} onChange={(e) => setNewSeqName(e.target.value)} placeholder="Sequence name..." className="flex-1 px-3 py-1.5 text-xs border border-gray-200 rounded-lg" onKeyDown={(e) => e.key === "Enter" && createSequence()} />
+                          <button onClick={createSequence} className="px-2.5 py-1.5 bg-black text-white text-xs rounded-lg">Create</button>
+                          <button onClick={() => setShowNewSequence(false)} className="px-2 py-1.5 text-xs text-gray-500">X</button>
+                        </div>
+                      ) : (
+                        <button onClick={() => setShowNewSequence(true)} className="w-full py-1.5 text-xs font-medium text-gray-600 border border-dashed border-gray-300 rounded-lg hover:bg-gray-50">+ New Sequence</button>
+                      )}
+                    </div>
+                    {sequences.map((seq) => (
+                      <div key={seq.id} className="border-b border-gray-100">
+                        <button onClick={() => { setSelectedSequenceId(selectedSequenceId === seq.id ? null : seq.id); }} className={`w-full text-left px-4 py-3 hover:bg-gray-50 ${selectedSequenceId === seq.id ? "bg-gray-50" : ""}`}>
+                          <div className="text-sm font-medium">{seq.name}</div>
+                          <div className="text-[11px] text-gray-500">{seq.phases.length} phases · {seq.dailyLimit}/day · Auto at 8am CT</div>
+                        </button>
+                        {selectedSequenceId === seq.id && selectedSequence && (
+                          <div className="px-4 pb-4 space-y-3">
+                            <div className="flex flex-wrap gap-1">
+                              {["MN", "IA", "MI", "WI", "OH", "IN", "SD", "ND", "CO", "AZ", "NV", "UT"].map((s) => (
+                                <span key={s} className="px-1.5 py-0.5 text-[10px] font-medium bg-gray-100 rounded text-gray-600">{s}</span>
+                              ))}
+                              <span className="text-[10px] text-gray-400 self-center ml-1">CHROs/CPOs · 25-2.5k</span>
+                            </div>
+                            {sendResult && <div className="text-xs text-gray-500">{sendResult}</div>}
+                            {selectedSequence.phases.map((phase) => (
+                              <div key={phase.id} className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                                <div className="px-3 py-2 flex items-center justify-between">
+                                  <button onClick={() => { if (expandedPhase === phase.id) { setExpandedPhase(null); return; } setExpandedPhase(phase.id); setEditSubject(phase.subject); setEditBody(phase.body); setEditDelayDays(phase.delayDays); }} className="flex-1 text-left">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-[10px] font-mono bg-gray-100 px-1.5 py-0.5 rounded">P{phase.phaseNumber}</span>
+                                      <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${phase.isActive ? "bg-black text-white" : "bg-gray-100 text-gray-500"}`}>{phase.isActive ? "On" : "Off"}</span>
+                                      {phase.phaseNumber > 1 && <span className="text-[10px] text-gray-400">{phase.delayDays}d</span>}
+                                      <span className="text-[10px] text-gray-400">{phase.sentCount} sent</span>
+                                    </div>
+                                    <p className="text-xs font-medium mt-1 truncate">{phase.subject}</p>
+                                  </button>
+                                  <div className="flex gap-1 ml-2">
+                                    <button onClick={() => togglePhase(phase.id, phase.isActive)} className="px-2 py-1 text-[10px] rounded border border-gray-300 text-gray-600 hover:bg-gray-50">{phase.isActive ? "Off" : "On"}</button>
+                                    {phase.isActive && <button onClick={() => sendPhase(phase.id)} disabled={sending === phase.id} className="px-2 py-1 text-[10px] rounded bg-black text-white disabled:opacity-50">{sending === phase.id ? "..." : "Send"}</button>}
+                                  </div>
+                                </div>
+                                {expandedPhase === phase.id && (
+                                  <div className="px-3 pb-3 border-t border-gray-100 pt-2 bg-gray-50/50">
+                                    <div className="flex items-center gap-1 mb-2">
+                                      <span className="text-[9px] text-gray-400">Insert:</span>
+                                      {VARIABLES.map((v) => (<button key={v.value} onClick={() => insertAtCursor(v.value)} className="px-1 py-0.5 text-[9px] font-mono bg-gray-100 rounded hover:bg-gray-200">{v.label}</button>))}
+                                    </div>
+                                    <input ref={subjectRef} value={editSubject} onChange={(e) => setEditSubject(e.target.value)} onFocus={() => setLastFocused("subject")} className="w-full px-2 py-1.5 border border-gray-200 rounded text-xs mb-2 focus:outline-none" />
+                                    <div ref={editBodyEditorRef}><RichEditor value={editBody} onChange={setEditBody} onFocus={() => setLastFocused("body")} placeholder="Email body..." /></div>
+                                    {phase.phaseNumber > 1 && (
+                                      <div className="flex items-center gap-2 mt-2">
+                                        <span className="text-[10px] text-gray-500">Send</span>
+                                        <input type="number" min={0} value={editDelayDays} onChange={(e) => setEditDelayDays(parseInt(e.target.value) || 0)} className="w-14 px-1.5 py-1 border border-gray-200 rounded text-[10px] text-center" />
+                                        <span className="text-[10px] text-gray-500">days after prev phase</span>
+                                      </div>
+                                    )}
+                                    <div className="flex items-center gap-2 mt-2">
+                                      <button onClick={() => savePhase(phase.id)} disabled={saving} className="px-2.5 py-1 bg-black text-white text-[10px] font-medium rounded disabled:opacity-50">{saving ? "..." : "Save"}</button>
+                                      <button onClick={() => setExpandedPhase(null)} className="px-2.5 py-1 text-[10px] text-gray-500">Cancel</button>
+                                    </div>
+                                    <div className="flex items-center gap-1.5 mt-2 pt-2 border-t border-gray-200">
+                                      <input value={testEmail} onChange={(e) => setTestEmail(e.target.value)} placeholder="test@email.com" className="px-2 py-1 border border-gray-200 rounded text-[10px] w-36" />
+                                      <button onClick={() => sendTest(phase.id)} disabled={testingPhase === phase.id || !testEmail.trim()} className="px-2 py-1 text-[10px] border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50">{testingPhase === phase.id ? "..." : "Test"}</button>
+                                      {testResult && <span className="text-[10px] text-gray-500">{testResult}</span>}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                            {addingPhase ? (
+                              <div className="bg-white rounded-lg border border-gray-200 p-3">
+                                <input value={phaseSubject} onChange={(e) => setPhaseSubject(e.target.value)} placeholder="Subject line" className="w-full px-2 py-1.5 border border-gray-200 rounded text-xs mb-2" />
+                                <RichEditor value={phaseBody} onChange={setPhaseBody} placeholder="Email body..." />
+                                <div className="flex gap-2 mt-2">
+                                  <button onClick={addPhaseToSequence} className="px-2.5 py-1 bg-black text-white text-[10px] font-medium rounded">Add</button>
+                                  <button onClick={() => setAddingPhase(false)} className="px-2.5 py-1 text-[10px] text-gray-500">Cancel</button>
+                                </div>
+                              </div>
+                            ) : (
+                              <button onClick={() => setAddingPhase(true)} className="w-full py-2 text-[10px] font-medium text-gray-500 border border-dashed border-gray-300 rounded hover:bg-white">+ Add Phase</button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
