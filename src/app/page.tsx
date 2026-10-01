@@ -837,10 +837,25 @@ export default function Home() {
                 <div>
                   <div className="font-semibold">{selectedSequence.name}</div>
                   <div className="text-sm text-gray-500">
-                    {selectedSequence.phases.length} phases · {selectedSequence.dailyLimit}/day limit
+                    {selectedSequence.phases.length} phases · {selectedSequence.dailyLimit}/day limit · Auto-sends weekdays at 8am CT
                   </div>
                 </div>
                 {sendResult && <span className="text-xs text-gray-500">{sendResult}</span>}
+              </div>
+
+              {/* Target states */}
+              <div className="px-6 py-3 bg-gray-50 border-b border-gray-200">
+                <div className="text-[10px] uppercase tracking-wide text-gray-400 mb-1.5">Targeting</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {["MN", "IA", "MI", "WI", "OH", "IN", "SD", "ND", "CO", "AZ", "NV", "UT"].map((s) => (
+                    <span key={s} className="px-2 py-0.5 text-[11px] font-medium bg-white border border-gray-200 rounded-full text-gray-600">
+                      {s}
+                    </span>
+                  ))}
+                  <span className="px-2 py-0.5 text-[11px] text-gray-400">
+                    CHROs/CPOs · 25-2,500 employees
+                  </span>
+                </div>
               </div>
 
               <div className="p-6 space-y-4">

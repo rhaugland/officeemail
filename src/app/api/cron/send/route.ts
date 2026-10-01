@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { contacts, phases, sends, sequences, messages } from "@/lib/db/schema";
-import { eq, and, inArray, notInArray, sql } from "drizzle-orm";
+import { eq, and, inArray, notInArray } from "drizzle-orm";
 import { Resend } from "resend";
 import { htmlToText } from "@/lib/html-to-text";
 
@@ -18,6 +18,7 @@ export async function GET(request: NextRequest) {
   const allSequences = await getDb().select().from(sequences);
   let totalSent = 0;
   let totalSkipped = 0;
+  let totalAutoApproved = 0;
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://officeemail.vercel.app";
 
   for (const seq of allSequences) {
@@ -29,23 +30,38 @@ export async function GET(request: NextRequest) {
 
     if (seqPhases.length === 0) continue;
 
+    // Step 1: Auto-approve up to dailyLimit "new" contacts
+    const newContacts = await getDb()
+      .select({ id: contacts.id })
+      .from(contacts)
+      .where(eq(contacts.status, "new"))
+      .limit(seq.dailyLimit);
+
+    if (newContacts.length > 0) {
+      const newIds = newContacts.map((c) => c.id);
+      await getDb()
+        .update(contacts)
+        .set({ status: "approved", updatedAt: new Date() })
+        .where(inArray(contacts.id, newIds));
+      totalAutoApproved += newIds.length;
+    }
+
+    // Step 2: Send phases
     let sentThisSequence = 0;
 
     for (const phase of seqPhases) {
       if (sentThisSequence >= seq.dailyLimit) break;
 
-      // Find contacts already sent this phase
       const alreadySent = await getDb()
         .select({ contactId: sends.contactId })
         .from(sends)
         .where(eq(sends.phaseId, phase.id));
       const alreadySentIds = alreadySent.map((s) => s.contactId);
 
-      // For Phase 1: send to approved contacts not yet sent
-      // For Phase 2+: send to contacts who received the previous phase X days ago and haven't replied/opted out
       let eligible;
 
       if (phase.phaseNumber === 1) {
+        // Phase 1: send to approved contacts not yet sent this phase
         eligible = await getDb()
           .select()
           .from(contacts)
@@ -57,11 +73,10 @@ export async function GET(request: NextRequest) {
           )
           .limit(seq.dailyLimit - sentThisSequence);
       } else {
-        // Find the previous phase
+        // Phase 2+: send to contacts who got previous phase >= delayDays ago
         const prevPhase = seqPhases.find((p) => p.phaseNumber === phase.phaseNumber - 1);
         if (!prevPhase) continue;
 
-        // Find contacts sent the previous phase at least delayDays ago
         const cutoffDate = new Date();
         cutoffDate.setDate(cutoffDate.getDate() - phase.delayDays);
 
@@ -76,7 +91,6 @@ export async function GET(request: NextRequest) {
 
         if (eligibleFromPrev.length === 0) continue;
 
-        // Exclude already sent this phase, replied, or opted out
         eligible = await getDb()
           .select()
           .from(contacts)
@@ -149,6 +163,7 @@ export async function GET(request: NextRequest) {
   }
 
   return NextResponse.json({
+    autoApproved: totalAutoApproved,
     sent: totalSent,
     skipped: totalSkipped,
   });
