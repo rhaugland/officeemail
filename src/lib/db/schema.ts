@@ -36,6 +36,7 @@ export const phases = pgTable("phases", {
   subject: text("subject").notNull(),
   body: text("body").notNull(),
   isActive: boolean("is_active").default(false).notNull(),
+  delayDays: integer("delay_days").default(0).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

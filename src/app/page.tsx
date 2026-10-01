@@ -38,8 +38,14 @@ type Phase = {
   subject: string;
   body: string;
   isActive: boolean;
+  delayDays: number;
   sentCount: number;
   eligibleCount: number;
+};
+
+type DashboardData = {
+  contacts: { total: number; new: number; approved: number; enrolled: number; replied: number; optedOut: number };
+  emails: { totalSent: number; sentToday: number; replies: number; replyRate: number };
 };
 
 type Sequence = {
@@ -114,6 +120,7 @@ export default function Home() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [threads, setThreads] = useState<Thread[]>([]);
   const [sequences, setSequences] = useState<Sequence[]>([]);
+  const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Contact state
@@ -132,6 +139,7 @@ export default function Home() {
   const [expandedPhase, setExpandedPhase] = useState<string | null>(null);
   const [editSubject, setEditSubject] = useState("");
   const [editBody, setEditBody] = useState("");
+  const [editDelayDays, setEditDelayDays] = useState(0);
   const [saving, setSaving] = useState(false);
   const [addingPhase, setAddingPhase] = useState(false);
   const [phaseSubject, setPhaseSubject] = useState("");
@@ -178,11 +186,17 @@ export default function Home() {
     setSequences(data);
   }, []);
 
+  const fetchDashboard = useCallback(async () => {
+    const res = await fetch("/api/dashboard");
+    const data = await res.json();
+    setDashboard(data);
+  }, []);
+
   useEffect(() => {
-    Promise.all([fetchContacts(), fetchThreads(), fetchSequences()]).then(() =>
+    Promise.all([fetchContacts(), fetchThreads(), fetchSequences(), fetchDashboard()]).then(() =>
       setLoading(false)
     );
-  }, [fetchContacts, fetchThreads, fetchSequences]);
+  }, [fetchContacts, fetchThreads, fetchSequences, fetchDashboard]);
 
   // ── Derived data ──
 
@@ -355,7 +369,7 @@ export default function Home() {
     await fetch(`/api/sequences/${selectedSequenceId}/phases/${phaseId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ subject: editSubject, body: editBody }),
+      body: JSON.stringify({ subject: editSubject, body: editBody, delayDays: editDelayDays }),
     });
     setSaving(false);
     fetchSequences();
@@ -375,6 +389,7 @@ export default function Home() {
       setSendResult(res.ok ? `Sent ${data.sent}` : `Error: ${data.error}`);
       fetchSequences();
       fetchThreads();
+      fetchDashboard();
     } catch {
       setSendResult("Failed");
     }
@@ -470,18 +485,48 @@ export default function Home() {
 
   return (
     <div className="h-screen flex flex-col">
-      {/* Header */}
-      <header className="h-14 border-b border-gray-200 bg-white flex items-center px-4 flex-shrink-0">
-        <h1 className="text-lg font-semibold tracking-tight">OfficeEmail</h1>
-        <div className="ml-auto flex items-center gap-2">
-          {importResult && <span className="text-xs text-gray-500">{importResult}</span>}
-          <button
-            onClick={importFromApollo}
-            disabled={importing}
-            className="px-3 py-1.5 bg-black text-white text-xs font-medium rounded-lg hover:bg-gray-800 disabled:opacity-50"
-          >
-            {importing ? "..." : `Import (pg ${importPage})`}
-          </button>
+      {/* Header with dashboard */}
+      <header className="border-b border-gray-200 bg-white flex-shrink-0">
+        <div className="flex items-center px-4 h-14">
+          <h1 className="text-lg font-semibold tracking-tight">OfficeEmail</h1>
+          {dashboard && (
+            <div className="ml-8 flex items-center gap-6">
+              <div className="text-center">
+                <div className="text-lg font-semibold">{dashboard.contacts.total}</div>
+                <div className="text-[10px] text-gray-400 uppercase tracking-wide">Contacts</div>
+              </div>
+              <div className="text-center">
+                <div className="text-lg font-semibold">{dashboard.contacts.enrolled}</div>
+                <div className="text-[10px] text-gray-400 uppercase tracking-wide">Enrolled</div>
+              </div>
+              <div className="text-center">
+                <div className="text-lg font-semibold">{dashboard.emails.totalSent}</div>
+                <div className="text-[10px] text-gray-400 uppercase tracking-wide">Sent</div>
+              </div>
+              <div className="text-center">
+                <div className="text-lg font-semibold">{dashboard.emails.sentToday}</div>
+                <div className="text-[10px] text-gray-400 uppercase tracking-wide">Today</div>
+              </div>
+              <div className="text-center">
+                <div className="text-lg font-semibold">{dashboard.contacts.replied}</div>
+                <div className="text-[10px] text-gray-400 uppercase tracking-wide">Replies</div>
+              </div>
+              <div className="text-center">
+                <div className="text-lg font-semibold">{dashboard.emails.replyRate}%</div>
+                <div className="text-[10px] text-gray-400 uppercase tracking-wide">Rate</div>
+              </div>
+            </div>
+          )}
+          <div className="ml-auto flex items-center gap-2">
+            {importResult && <span className="text-xs text-gray-500">{importResult}</span>}
+            <button
+              onClick={importFromApollo}
+              disabled={importing}
+              className="px-3 py-1.5 text-gray-500 text-xs font-medium border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+            >
+              {importing ? "..." : "Import"}
+            </button>
+          </div>
         </div>
       </header>
 
@@ -807,12 +852,16 @@ export default function Home() {
                         setExpandedPhase(phase.id);
                         setEditSubject(phase.subject);
                         setEditBody(phase.body);
+                        setEditDelayDays(phase.delayDays);
                       }} className="flex-1 text-left">
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-mono bg-gray-100 px-2 py-0.5 rounded">P{phase.phaseNumber}</span>
                           <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${phase.isActive ? "bg-black text-white" : "bg-gray-100 text-gray-500"}`}>
                             {phase.isActive ? "Active" : "Off"}
                           </span>
+                          {phase.phaseNumber > 1 && (
+                            <span className="text-[11px] text-gray-400">{phase.delayDays}d delay</span>
+                          )}
                           <span className="text-[11px] text-gray-400">{phase.sentCount} sent</span>
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`text-gray-400 transition-transform ${expandedPhase === phase.id ? "rotate-180" : ""}`}>
                             <polyline points="6 9 12 15 18 9" />
@@ -856,6 +905,19 @@ export default function Home() {
                         <div ref={editBodyEditorRef}>
                           <RichEditor value={editBody} onChange={setEditBody} onFocus={() => setLastFocused("body")} placeholder="Email body..." />
                         </div>
+                        {phase.phaseNumber > 1 && (
+                          <div className="flex items-center gap-2 mt-3">
+                            <label className="text-xs text-gray-500">Send</label>
+                            <input
+                              type="number"
+                              min={0}
+                              value={editDelayDays}
+                              onChange={(e) => setEditDelayDays(parseInt(e.target.value) || 0)}
+                              className="w-16 px-2 py-1 border border-gray-200 rounded text-xs text-center focus:outline-none"
+                            />
+                            <label className="text-xs text-gray-500">days after previous phase</label>
+                          </div>
+                        )}
                         <div className="flex items-center gap-2 mt-3">
                           <button onClick={() => savePhase(phase.id)} disabled={saving} className="px-3 py-1.5 bg-black text-white text-xs font-medium rounded-lg disabled:opacity-50">
                             {saving ? "..." : "Save"}

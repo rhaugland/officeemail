@@ -8,11 +8,16 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string; phaseId: string }> }
 ) {
   const { phaseId } = await params;
-  const { subject, body } = await request.json();
+  const { subject, body, delayDays } = await request.json();
+
+  const updates: Record<string, unknown> = {};
+  if (subject !== undefined) updates.subject = subject;
+  if (body !== undefined) updates.body = body;
+  if (delayDays !== undefined) updates.delayDays = delayDays;
 
   const [updated] = await getDb()
     .update(phases)
-    .set({ subject, body })
+    .set(updates)
     .where(eq(phases.id, phaseId))
     .returning();
 

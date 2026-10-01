@@ -8,7 +8,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: sequenceId } = await params;
-  const { subject, body } = await request.json();
+  const { subject, body, delayDays = 0 } = await request.json();
 
   const [maxPhase] = await getDb()
     .select({ max: sql<number>`coalesce(max(${phases.phaseNumber}), 0)` })
@@ -23,6 +23,7 @@ export async function POST(
       subject,
       body,
       isActive: false,
+      delayDays,
     })
     .returning();
 
