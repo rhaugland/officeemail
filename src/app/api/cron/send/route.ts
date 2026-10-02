@@ -124,20 +124,12 @@ export async function GET(request: NextRequest) {
         const optOutUrl = `${appUrl}/api/opt-out?id=${contact.id}`;
         const textWithOptOut = `${personalizedBody}\n\n---\nUnsubscribe: ${optOutUrl}`;
 
-        const personalizedHtml = phase.body
-          .replace(/{{first_name}}/g, contact.firstName)
-          .replace(/{{last_name}}/g, contact.lastName)
-          .replace(/{{company}}/g, contact.companyName)
-          .replace(/{{title}}/g, contact.title);
-        const htmlWithOptOut = `${personalizedHtml}<br><br><hr style="border:none;border-top:1px solid #eee;margin:20px 0"><p style="font-size:12px;color:#999"><a href="${optOutUrl}" style="color:#999">Unsubscribe</a></p>`;
-
         try {
           const result = await getResend().emails.send({
             from: process.env.RESEND_FROM_EMAIL || "noreply@example.com",
             to: contact.email,
             subject: personalizedSubject,
             text: textWithOptOut,
-            html: htmlWithOptOut,
           });
 
           await getDb().insert(sends).values({
