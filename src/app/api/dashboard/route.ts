@@ -8,7 +8,7 @@ export async function GET() {
     .select({
       total: sql<number>`count(*)`,
       approved: sql<number>`count(*) filter (where ${contacts.status} = 'approved')`,
-      enrolled: sql<number>`count(*) filter (where ${contacts.status} = 'enrolled')`,
+      enrolled: sql<number>`count(*) filter (where ${contacts.status} in ('enrolled', 'replied'))`,
       replied: sql<number>`count(*) filter (where ${contacts.status} = 'replied')`,
       optedOut: sql<number>`count(*) filter (where ${contacts.status} = 'opted_out')`,
       newCount: sql<number>`count(*) filter (where ${contacts.status} = 'new')`,
