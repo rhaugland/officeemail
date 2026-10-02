@@ -8,6 +8,26 @@ function getResend() {
   return new Resend(process.env.RESEND_API_KEY);
 }
 
+function parseDemoQuestion(body: string): { name: string; email: string; message: string } | null {
+  // Body format: "NEW QUESTION FROM THE DEMO\nName <email>\nMessage"
+  const lines = body.split("\n").map((l) => l.trim()).filter(Boolean);
+  const headerIdx = lines.findIndex((l) => l.toUpperCase().includes("NEW QUESTION FROM THE DEMO"));
+  if (headerIdx === -1) return null;
+
+  // Look for "Name <email>" pattern in remaining lines
+  const remaining = lines.slice(headerIdx + 1);
+  const emailMatch = remaining.join("\n").match(/([^<\n]+?)\s*<([^>]+@[^>]+)>/);
+  if (!emailMatch) return null;
+
+  const name = emailMatch[1].trim();
+  const email = emailMatch[2].trim().toLowerCase();
+  // Message is everything after the name/email line
+  const emailLineIdx = remaining.findIndex((l) => l.includes(emailMatch[0]));
+  const message = remaining.slice(emailLineIdx + 1).join("\n").trim();
+
+  return { name, email, message };
+}
+
 export async function POST(request: Request) {
   const payload = await request.json();
 
@@ -20,21 +40,6 @@ export async function POST(request: Request) {
 
     if (!fromEmail) {
       return NextResponse.json({ ok: true, skipped: "no from" });
-    }
-
-    // Try to find contact by from email, then by reply-to
-    let [contact] = await getDb()
-      .select()
-      .from(contacts)
-      .where(eq(contacts.email, fromEmail))
-      .limit(1);
-
-    if (!contact && replyTo) {
-      [contact] = await getDb()
-        .select()
-        .from(contacts)
-        .where(eq(contacts.email, replyTo))
-        .limit(1);
     }
 
     // Fetch full email body from Resend API
@@ -50,22 +55,88 @@ export async function POST(request: Request) {
       }
     }
 
+    // Check if this is a demo support form submission
+    const demoQuestion = parseDemoQuestion(body);
+    const isDemoForm = fromEmail.includes("team@officecast.co") || !!demoQuestion;
+
+    if (isDemoForm && demoQuestion) {
+      // Find or create contact by the actual sender's email
+      let [contact] = await getDb()
+        .select()
+        .from(contacts)
+        .where(eq(contacts.email, demoQuestion.email))
+        .limit(1);
+
+      if (!contact) {
+        const nameParts = demoQuestion.name.split(" ");
+        const firstName = nameParts[0] || "Unknown";
+        const lastName = nameParts.slice(1).join(" ") || "Unknown";
+
+        const [newContact] = await getDb()
+          .insert(contacts)
+          .values({
+            firstName,
+            lastName,
+            email: demoQuestion.email,
+            title: "Demo Inquiry",
+            companyName: "Via Working Demo",
+            companySize: null,
+            companyLocation: null,
+            industry: null,
+            status: "replied",
+            repliedAt: new Date(),
+          })
+          .returning();
+
+        contact = newContact;
+      }
+
+      await getDb().insert(messages).values({
+        contactId: contact.id,
+        direction: "inbound",
+        subject: "Demo Question",
+        body: demoQuestion.message || body,
+      });
+
+      if (contact.status !== "replied" && contact.status !== "opted_out") {
+        await getDb()
+          .update(contacts)
+          .set({ status: "replied", repliedAt: new Date(), updatedAt: new Date() })
+          .where(eq(contacts.id, contact.id));
+      }
+
+      return NextResponse.json({ ok: true, stored: true, demo: true });
+    }
+
+    // Regular inbound email — find contact by from or reply-to
+    let [contact] = await getDb()
+      .select()
+      .from(contacts)
+      .where(eq(contacts.email, fromEmail))
+      .limit(1);
+
+    if (!contact && replyTo) {
+      [contact] = await getDb()
+        .select()
+        .from(contacts)
+        .where(eq(contacts.email, replyTo))
+        .limit(1);
+    }
+
     if (!contact) {
-      // Unknown sender (e.g. demo support form) — create a contact from reply-to or from
       const senderEmail = replyTo || fromEmail;
-      // Try to parse name from the body or use email prefix
       const namePart = senderEmail.split("@")[0].replace(/[._-]/g, " ");
       const parts = namePart.split(" ");
       const firstName = parts[0] ? parts[0].charAt(0).toUpperCase() + parts[0].slice(1) : "Unknown";
-      const lastName = parts[1] ? parts[1].charAt(0).toUpperCase() + parts[1].slice(1) : "";
+      const lastName = parts[1] ? parts[1].charAt(0).toUpperCase() + parts[1].slice(1) : "Unknown";
 
       const [newContact] = await getDb()
         .insert(contacts)
         .values({
           firstName,
-          lastName: lastName || "Unknown",
+          lastName,
           email: senderEmail,
-          title: "Demo Inquiry",
+          title: "",
           companyName: "Unknown",
           companySize: null,
           companyLocation: null,
@@ -85,7 +156,6 @@ export async function POST(request: Request) {
       body: body || "(email body unavailable)",
     });
 
-    // Mark contact as replied
     if (contact.status !== "replied" && contact.status !== "opted_out") {
       await getDb()
         .update(contacts)
