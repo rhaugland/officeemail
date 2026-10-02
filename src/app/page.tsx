@@ -122,7 +122,12 @@ export default function Home() {
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [panel, setPanel] = useState<"contacts" | "sequences" | null>(null);
-  const [showSent, setShowSent] = useState(true);
+  const [showSent, setShowSent] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("showSent") !== "false";
+    }
+    return true;
+  });
 
   // Contact state
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
@@ -595,7 +600,7 @@ export default function Home() {
         <div className={`w-full sm:w-[320px] border-r border-gray-200 bg-white flex flex-col flex-shrink-0 ${selectedContactId ? "hidden sm:flex" : "flex"}`}>
           <div className="px-3 py-2.5 border-b border-gray-100 flex items-center justify-between">
             <div className="text-xs font-medium text-gray-400 uppercase tracking-wide">Messages</div>
-            <button onClick={() => setShowSent(!showSent)} className={`text-[10px] font-medium px-2 py-0.5 rounded transition-colors ${showSent ? "bg-gray-100 text-gray-600" : "bg-black text-white"}`}>
+            <button onClick={() => { const next = !showSent; setShowSent(next); localStorage.setItem("showSent", String(next)); }} className={`text-[10px] font-medium px-2 py-0.5 rounded transition-colors ${showSent ? "bg-gray-100 text-gray-600" : "bg-black text-white"}`}>
               {showSent ? "Hide Sent" : "Replies Only"}
             </button>
           </div>
