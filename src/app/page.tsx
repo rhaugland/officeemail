@@ -122,6 +122,7 @@ export default function Home() {
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [panel, setPanel] = useState<"contacts" | "sequences" | null>(null);
+  const [showSent, setShowSent] = useState(true);
 
   // Contact state
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
@@ -592,16 +593,19 @@ export default function Home() {
       <div className="flex flex-1 overflow-hidden relative">
         {/* ── Message Sidebar ── */}
         <div className={`w-full sm:w-[320px] border-r border-gray-200 bg-white flex flex-col flex-shrink-0 ${selectedContactId ? "hidden sm:flex" : "flex"}`}>
-          <div className="px-3 py-2.5 border-b border-gray-100">
+          <div className="px-3 py-2.5 border-b border-gray-100 flex items-center justify-between">
             <div className="text-xs font-medium text-gray-400 uppercase tracking-wide">Messages</div>
+            <button onClick={() => setShowSent(!showSent)} className={`text-[10px] font-medium px-2 py-0.5 rounded transition-colors ${showSent ? "bg-gray-100 text-gray-600" : "bg-black text-white"}`}>
+              {showSent ? "Hide Sent" : "Replies Only"}
+            </button>
           </div>
           <div className="flex-1 overflow-y-auto">
-            {sortedThreads.length === 0 ? (
+            {sortedThreads.filter((t) => showSent || t.messages.some((m) => m.direction === "inbound")).length === 0 ? (
               <div className="px-4 py-12 text-center text-gray-400 text-xs">
                 No conversations yet. Messages will appear here as emails are sent.
               </div>
             ) : (
-              sortedThreads.map((thread) => {
+              sortedThreads.filter((t) => showSent || t.messages.some((m) => m.direction === "inbound")).map((thread) => {
                 const latest = thread.messages[0];
                 const hasInbound = thread.messages.some((m) => m.direction === "inbound");
                 const isActive = selectedContactId === thread.contact.id;
