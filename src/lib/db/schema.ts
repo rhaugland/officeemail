@@ -14,6 +14,7 @@ export const contacts = pgTable("contacts", {
   firstName: text("first_name").notNull(),
   lastName: text("last_name").notNull(),
   email: text("email").notNull().unique(),
+  phone: text("phone"),
   title: text("title").notNull(),
   companyName: text("company_name").notNull(),
   companySize: integer("company_size"),
@@ -25,6 +26,8 @@ export const contacts = pgTable("contacts", {
   enrolledAt: timestamp("enrolled_at"),
   repliedAt: timestamp("replied_at"),
   optedOutAt: timestamp("opted_out_at"),
+  openCount: integer("open_count").default(0).notNull(),
+  lastOpenedAt: timestamp("last_opened_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

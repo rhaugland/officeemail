@@ -125,6 +125,7 @@ export async function GET(request: NextRequest) {
         firstName: enriched.first_name || "",
         lastName: enriched.last_name || "",
         email: enriched.email,
+        phone: enriched.phone_numbers?.[0]?.sanitized_number || enriched.organization?.phone || null,
         title: enriched.title || "",
         companyName: enriched.organization?.name || "",
         companySize: enriched.organization?.estimated_num_employees || null,

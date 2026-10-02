@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { messages, contacts } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { messages, contacts, sends } from "@/lib/db/schema";
+import { eq, sql } from "drizzle-orm";
 import { Resend } from "resend";
 
 function getResend() {
@@ -164,6 +164,32 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ ok: true, stored: true });
+  }
+
+  if (payload.type === "email.opened") {
+    const resendId = payload.data?.email_id;
+    if (resendId) {
+      // Find the contact via the sends table
+      const [send] = await getDb()
+        .select({ contactId: sends.contactId })
+        .from(sends)
+        .where(eq(sends.resendId, resendId))
+        .limit(1);
+
+      if (send) {
+        await getDb()
+          .update(contacts)
+          .set({
+            openCount: sql`${contacts.openCount} + 1`,
+            lastOpenedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(contacts.id, send.contactId));
+
+        return NextResponse.json({ ok: true, tracked: true });
+      }
+    }
+    return NextResponse.json({ ok: true, skipped: "no matching send" });
   }
 
   return NextResponse.json({ ok: true, ignored: payload.type });

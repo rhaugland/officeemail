@@ -10,12 +10,28 @@ type Contact = {
   firstName: string;
   lastName: string;
   email: string;
+  phone: string | null;
   title: string;
   companyName: string;
   companySize: number | null;
   companyLocation: string | null;
   industry: string | null;
   status: string;
+  openCount: number;
+  lastOpenedAt: string | null;
+};
+
+type CallListContact = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string | null;
+  title: string;
+  companyName: string;
+  status: string;
+  openCount: number;
+  lastOpenedAt: string | null;
 };
 
 type Message = {
@@ -80,6 +96,14 @@ function SequenceIcon({ active }: { active?: boolean }) {
   );
 }
 
+function PhoneIcon({ active }: { active?: boolean }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={active ? "white" : "currentColor"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+    </svg>
+  );
+}
+
 function FilterIcon() {
   return (
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -121,7 +145,8 @@ export default function Home() {
   const [sequences, setSequences] = useState<Sequence[]>([]);
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [panel, setPanel] = useState<"contacts" | "sequences" | null>(null);
+  const [panel, setPanel] = useState<"contacts" | "sequences" | "calls" | null>(null);
+  const [callList, setCallList] = useState<CallListContact[]>([]);
   const [showSent, setShowSent] = useState(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("showSent") !== "false";
@@ -196,6 +221,12 @@ export default function Home() {
     const res = await fetch("/api/dashboard");
     const data = await res.json();
     setDashboard(data);
+  }, []);
+
+  const fetchCallList = useCallback(async () => {
+    const res = await fetch("/api/call-list");
+    const data = await res.json();
+    setCallList(data);
   }, []);
 
   useEffect(() => {
@@ -546,6 +577,12 @@ export default function Home() {
             >
               Sequences ({sequences.length})
             </button>
+            <button
+              onClick={() => { if (panel !== "calls") fetchCallList(); setPanel(panel === "calls" ? null : "calls"); }}
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${panel === "calls" ? "bg-black text-white" : "text-gray-500 border border-gray-200 hover:bg-gray-50"}`}
+            >
+              Call List
+            </button>
           </div>
         </div>
       </header>
@@ -590,6 +627,12 @@ export default function Home() {
               className={`p-1.5 rounded-lg transition-colors ${panel === "sequences" ? "bg-black text-white" : "text-gray-500 border border-gray-200"}`}
             >
               <SequenceIcon active={panel === "sequences"} />
+            </button>
+            <button
+              onClick={() => { if (panel !== "calls") fetchCallList(); setPanel(panel === "calls" ? null : "calls"); }}
+              className={`p-1.5 rounded-lg transition-colors ${panel === "calls" ? "bg-black text-white" : "text-gray-500 border border-gray-200"}`}
+            >
+              <PhoneIcon active={panel === "calls"} />
             </button>
           </div>
         </div>
@@ -778,7 +821,7 @@ export default function Home() {
                     ))}
                   </div>
                 </>
-              ) : (
+              ) : panel === "sequences" ? (
                 <>
                   <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
                     <span className="font-semibold text-sm">Sequences</span>
@@ -874,7 +917,42 @@ export default function Home() {
                     ))}
                   </div>
                 </>
-              )}
+              ) : panel === "calls" ? (
+                <>
+                  <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+                    <span className="font-semibold text-sm">Call List ({callList.length})</span>
+                    <button onClick={() => setPanel(null)} className="text-gray-400 hover:text-gray-600 text-lg">&times;</button>
+                  </div>
+                  <div className="flex-1 overflow-y-auto">
+                    {callList.length === 0 ? (
+                      <div className="px-4 py-12 text-center text-gray-400 text-xs">
+                        No opens tracked yet. Contacts who open your emails will appear here.
+                      </div>
+                    ) : (
+                      callList.map((c) => (
+                        <div key={c.id} className="px-4 py-3 border-b border-gray-50 hover:bg-gray-50">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-sm font-medium">{c.firstName} {c.lastName}</span>
+                            <span className="text-[10px] font-medium bg-black text-white px-2 py-0.5 rounded-full">{c.openCount} {c.openCount === 1 ? "open" : "opens"}</span>
+                          </div>
+                          <div className="text-[11px] text-gray-500">{c.title} · {c.companyName}</div>
+                          {c.phone ? (
+                            <a href={`tel:${c.phone}`} className="text-xs font-medium text-black mt-1 inline-flex items-center gap-1">
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" /></svg>
+                              {c.phone}
+                            </a>
+                          ) : (
+                            <div className="text-[10px] text-gray-400 mt-1">No phone on file</div>
+                          )}
+                          {c.lastOpenedAt && (
+                            <div className="text-[10px] text-gray-400 mt-0.5">Last opened {formatTime(c.lastOpenedAt)}</div>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </>
+              ) : null}
             </div>
           </>
         )}
