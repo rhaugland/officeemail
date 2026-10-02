@@ -25,6 +25,7 @@ export async function GET() {
           lastName: contacts.lastName,
           email: contacts.email,
           companyName: contacts.companyName,
+          lastReadAt: contacts.lastReadAt,
         })
         .from(contacts)
         .where(eq(contacts.id, msg.contactId))

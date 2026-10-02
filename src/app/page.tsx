@@ -44,7 +44,7 @@ type Message = {
 };
 
 type Thread = {
-  contact: { id: string; firstName: string; lastName: string; email: string; companyName: string };
+  contact: { id: string; firstName: string; lastName: string; email: string; companyName: string; lastReadAt: string | null };
   messages: Message[];
 };
 
@@ -655,18 +655,28 @@ export default function Home() {
             ) : (
               sortedThreads.filter((t) => showSent || t.messages.some((m) => m.direction === "inbound")).map((thread) => {
                 const latest = thread.messages[0];
-                const hasInbound = thread.messages.some((m) => m.direction === "inbound");
+                const lastReadAt = thread.contact.lastReadAt ? new Date(thread.contact.lastReadAt) : null;
+                const hasUnread = thread.messages.some((m) => m.direction === "inbound" && (!lastReadAt || new Date(m.createdAt) > lastReadAt));
                 const isActive = selectedContactId === thread.contact.id;
 
                 return (
                   <button
                     key={thread.contact.id}
-                    onClick={() => { setSelectedContactId(thread.contact.id); setSelectedSequenceId(null); setPanel(null); }}
+                    onClick={() => {
+                      setSelectedContactId(thread.contact.id);
+                      setSelectedSequenceId(null);
+                      setPanel(null);
+                      if (hasUnread) {
+                        fetch("/api/inbox/read", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contactId: thread.contact.id }) });
+                        thread.contact.lastReadAt = new Date().toISOString();
+                        setThreads([...threads]);
+                      }
+                    }}
                     className={`w-full text-left px-3 py-3 border-b border-gray-50 transition-colors ${isActive ? "bg-gray-100" : "hover:bg-gray-50"}`}
                   >
                     <div className="flex items-center justify-between mb-0.5">
                       <span className="text-sm font-medium truncate flex items-center gap-1.5">
-                        {hasInbound && <span className="w-2 h-2 rounded-full bg-black flex-shrink-0" />}
+                        {hasUnread && <span className="w-2 h-2 rounded-full bg-black flex-shrink-0" />}
                         {thread.contact.firstName} {thread.contact.lastName}
                       </span>
                       <span className="text-[10px] text-gray-400 flex-shrink-0 ml-2">{formatTime(latest.createdAt)}</span>

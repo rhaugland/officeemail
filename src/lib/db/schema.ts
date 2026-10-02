@@ -26,6 +26,7 @@ export const contacts = pgTable("contacts", {
   enrolledAt: timestamp("enrolled_at"),
   repliedAt: timestamp("replied_at"),
   optedOutAt: timestamp("opted_out_at"),
+  lastReadAt: timestamp("last_read_at"),
   openCount: integer("open_count").default(0).notNull(),
   lastOpenedAt: timestamp("last_opened_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
