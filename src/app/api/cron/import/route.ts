@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
     .where(sql`${contacts.apolloId} is not null`);
 
   const startPage = Math.floor(Number(existingCount) / 50) + 1;
-  const maxPerRun = 50;
+  const maxPerRun = 25;
   let totalImported = 0;
   let totalSkipped = 0;
   let totalEnrichFailed = 0;
@@ -142,7 +142,7 @@ export async function GET(request: NextRequest) {
       });
       totalImported++;
 
-      await new Promise((r) => setTimeout(r, 200));
+      await new Promise((r) => setTimeout(r, 100));
     }
 
     page++;
