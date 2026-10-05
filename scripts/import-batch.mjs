@@ -2,7 +2,7 @@ import { neon } from '@neondatabase/serverless';
 
 const sql = neon(process.env.DATABASE_URL);
 const API_KEY = process.env.APOLLO_API_KEY;
-const MAX_ENRICH = 100;
+const MAX_ENRICH = 50;
 
 const TARGET_TITLES = [
   'Chief Human Resources Officer', 'Chief People Officer', 'CHRO', 'CPO',
@@ -24,7 +24,9 @@ async function enrichPerson(apolloId) {
   return data.person || null;
 }
 
-let page = 1;
+const [{ count }] = await sql`SELECT count(*) FROM contacts WHERE apollo_id IS NOT NULL`;
+let page = Math.floor(Number(count) / 100) + 1;
+console.log(`Existing Apollo contacts: ${count}, starting at page ${page}`);
 let totalImported = 0;
 let totalSkipped = 0;
 let totalEnrichFailed = 0;
@@ -73,8 +75,9 @@ while (totalEnriched < MAX_ENRICH) {
     if (emailExists.length > 0) { totalSkipped++; continue; }
 
     const loc = enriched.city ? `${enriched.city}, ${enriched.state}` : '';
-    await sql`INSERT INTO contacts (first_name, last_name, email, title, company_name, company_size, company_location, industry, apollo_id, status)
-      VALUES (${enriched.first_name || ''}, ${enriched.last_name || ''}, ${enriched.email}, ${enriched.title || ''}, ${enriched.organization?.name || ''}, ${enriched.organization?.estimated_num_employees || null}, ${loc}, ${enriched.organization?.industry || ''}, ${enriched.id || null}, 'new')`;
+    const phone = enriched.phone_numbers?.[0]?.sanitized_number || enriched.organization?.phone || null;
+    await sql`INSERT INTO contacts (first_name, last_name, email, phone, title, company_name, company_size, company_location, industry, apollo_id, status)
+      VALUES (${enriched.first_name || ''}, ${enriched.last_name || ''}, ${enriched.email}, ${phone}, ${enriched.title || ''}, ${enriched.organization?.name || ''}, ${enriched.organization?.estimated_num_employees || null}, ${loc}, ${enriched.organization?.industry || ''}, ${enriched.id || null}, 'new')`;
     totalImported++;
     console.log(`  + ${enriched.first_name} ${enriched.last_name} | ${enriched.email} | ${enriched.organization?.name}`);
 
