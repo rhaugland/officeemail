@@ -1,3 +1,5 @@
+export const maxDuration = 300;
+
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { contacts } from "@/lib/db/schema";
@@ -61,7 +63,7 @@ export async function GET(request: NextRequest) {
     .where(sql`${contacts.apolloId} is not null`);
 
   const startPage = Math.floor(Number(existingCount) / 50) + 1;
-  const maxPerRun = 10;
+  const maxPerRun = 100;
   let totalImported = 0;
   let totalSkipped = 0;
   let totalEnrichFailed = 0;

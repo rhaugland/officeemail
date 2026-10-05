@@ -1,3 +1,5 @@
+export const maxDuration = 300;
+
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { contacts, phases, sends, sequences, messages } from "@/lib/db/schema";
@@ -46,12 +48,10 @@ export async function GET(request: NextRequest) {
       totalAutoApproved += newIds.length;
     }
 
-    // Step 2: Send phases
-    let sentThisSequence = 0;
+    // Step 2: Send Phase 1 to up to dailyLimit new contacts
+    // Step 3: Send Phase 2+ to ALL eligible contacts (no cap)
 
     for (const phase of seqPhases) {
-      if (sentThisSequence >= seq.dailyLimit) break;
-
       const alreadySent = await getDb()
         .select({ contactId: sends.contactId })
         .from(sends)
@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
       let eligible;
 
       if (phase.phaseNumber === 1) {
-        // Phase 1: send to approved contacts not yet sent this phase
+        // Phase 1: capped at dailyLimit
         eligible = await getDb()
           .select()
           .from(contacts)
@@ -71,9 +71,9 @@ export async function GET(request: NextRequest) {
               alreadySentIds.length > 0 ? notInArray(contacts.id, alreadySentIds) : undefined
             )
           )
-          .limit(seq.dailyLimit - sentThisSequence);
+          .limit(seq.dailyLimit);
       } else {
-        // Phase 2+: send to contacts who got previous phase >= delayDays ago
+        // Phase 2+: send to ALL contacts who got previous phase >= delayDays ago
         const prevPhase = seqPhases.find((p) => p.phaseNumber === phase.phaseNumber - 1);
         if (!prevPhase) continue;
 
@@ -100,13 +100,10 @@ export async function GET(request: NextRequest) {
               inArray(contacts.status, ["approved", "enrolled"]),
               alreadySentIds.length > 0 ? notInArray(contacts.id, alreadySentIds) : undefined
             )
-          )
-          .limit(seq.dailyLimit - sentThisSequence);
+          );
       }
 
       for (const contact of eligible) {
-        if (sentThisSequence >= seq.dailyLimit) break;
-
         const personalizedBody = htmlToText(
           phase.body
             .replace(/{{first_name}}/g, contact.firstName)
@@ -153,7 +150,6 @@ export async function GET(request: NextRequest) {
               .where(eq(contacts.id, contact.id));
           }
 
-          sentThisSequence++;
           totalSent++;
         } catch {
           totalSkipped++;
