@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { contacts } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 const TARGET_TITLES = [
   "Chief Human Resources Officer",
@@ -54,14 +54,20 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Apollo API key not configured" }, { status: 500 });
   }
 
+  // Figure out which Apollo search page to start on based on how many contacts we have
+  const [{ count: existingCount }] = await getDb()
+    .select({ count: sql<number>`count(*)` })
+    .from(contacts)
+    .where(sql`${contacts.apolloId} is not null`);
+
+  const startPage = Math.floor(Number(existingCount) / 50) + 1;
+  const maxPerRun = 50;
   let totalImported = 0;
   let totalSkipped = 0;
   let totalEnrichFailed = 0;
-  let totalEnriched = 0;
-  let page = 1;
-  const maxEnrichPerRun = 100;
+  let page = startPage;
 
-  while (totalEnriched < maxEnrichPerRun) {
+  while (totalImported < maxPerRun) {
     const response = await fetch("https://api.apollo.io/v1/mixed_people/api_search", {
       method: "POST",
       headers: {
@@ -84,14 +90,14 @@ export async function GET(request: NextRequest) {
     if (people.length === 0) break;
 
     for (const person of people) {
-      if (totalEnriched >= maxEnrichPerRun) break;
+      if (totalImported >= maxPerRun) break;
 
       if (!person.id) {
         totalSkipped++;
         continue;
       }
 
-      // Skip if we already have this Apollo contact (saves credits)
+      // Skip if we already have this Apollo contact
       const alreadyHave = await getDb()
         .select({ id: contacts.id })
         .from(contacts)
@@ -103,7 +109,6 @@ export async function GET(request: NextRequest) {
         continue;
       }
 
-      totalEnriched++;
       const enriched = await enrichPerson(apiKey, person.id);
       if (!enriched?.email) {
         totalEnrichFailed++;
@@ -147,6 +152,7 @@ export async function GET(request: NextRequest) {
     imported: totalImported,
     skipped: totalSkipped,
     enrichFailed: totalEnrichFailed,
-    pagesScanned: page - 1,
+    startPage,
+    pagesScanned: page - startPage,
   });
 }
