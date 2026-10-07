@@ -21,7 +21,6 @@ export async function GET(request: NextRequest) {
   let totalSent = 0;
   let totalSkipped = 0;
   let totalAutoApproved = 0;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://officeemail.vercel.app";
 
   for (const seq of allSequences) {
     const seqPhases = await getDb()
@@ -118,15 +117,12 @@ export async function GET(request: NextRequest) {
           .replace(/{{company}}/g, contact.companyName)
           .replace(/{{title}}/g, contact.title);
 
-        const optOutUrl = `${appUrl}/api/opt-out?id=${contact.id}`;
-        const textWithOptOut = `${personalizedBody}\n\n---\nUnsubscribe: ${optOutUrl}`;
-
         try {
           const result = await getResend().emails.send({
             from: process.env.RESEND_FROM_EMAIL || "noreply@example.com",
             to: contact.email,
             subject: personalizedSubject,
-            text: textWithOptOut,
+            text: personalizedBody,
           });
 
           await getDb().insert(sends).values({
