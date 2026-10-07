@@ -63,7 +63,7 @@ export async function GET(request: NextRequest) {
     .where(sql`${contacts.apolloId} is not null`);
 
   const startPage = Math.floor(Number(existingCount) / 50) + 1;
-  const maxPerRun = 100;
+  const maxPerRun = 25;
   let totalImported = 0;
   let totalSkipped = 0;
   let totalEnrichFailed = 0;
