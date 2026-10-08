@@ -126,6 +126,7 @@ export default function Home() {
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [panel, setPanel] = useState<"contacts" | "sequences" | null>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showSent, setShowSent] = useState(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("showSent") !== "false";
@@ -601,9 +602,22 @@ export default function Home() {
 
       <div className="flex flex-1 overflow-hidden relative">
         {/* ── Message Sidebar ── */}
-        <div className={`w-full sm:w-[320px] border-r border-[#1e1e1e] bg-[#0a0a0a] flex flex-col flex-shrink-0 ${selectedContactId ? "hidden sm:flex" : "flex"}`}>
+        <div className={`border-r border-[#1e1e1e] bg-[#0a0a0a] flex flex-col flex-shrink-0 transition-all duration-200 ${sidebarCollapsed ? "hidden sm:flex sm:w-[48px]" : `w-full sm:w-[320px] ${selectedContactId ? "hidden sm:flex" : "flex"}`}`}>
+          {sidebarCollapsed ? (
+            <div className="flex flex-col items-center py-3">
+              <button onClick={() => setSidebarCollapsed(false)} className="text-[#6b6560] hover:text-[#e8e0d8] transition-colors p-1.5" title="Expand sidebar">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+              </button>
+            </div>
+          ) : (
+          <>
           <div className="px-3 py-2.5 border-b border-[#1e1e1e] flex items-center justify-between">
-            <div className="text-[10px] font-medium text-[#5a5550] uppercase tracking-[1px]">Messages</div>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setSidebarCollapsed(true)} className="hidden sm:block text-[#5a5550] hover:text-[#e8e0d8] transition-colors" title="Collapse sidebar">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+              </button>
+              <div className="text-[10px] font-medium text-[#5a5550] uppercase tracking-[1px]">Messages</div>
+            </div>
             <button onClick={() => { const next = !showSent; setShowSent(next); localStorage.setItem("showSent", String(next)); }} className={`text-[10px] font-medium px-3 py-1 rounded-full transition-all ${showSent ? "bg-[#1e1e1e] text-[#6b6560]" : "bg-gradient-to-r from-[#ffb428] to-[#e64664] text-[#0a0a0a]"}`}>
               {showSent ? "Hide Sent" : "Replies Only"}
             </button>
@@ -652,6 +666,8 @@ export default function Home() {
               })
             )}
           </div>
+          </>
+          )}
         </div>
 
         {/* ── Main Area: Thread or Empty ── */}
