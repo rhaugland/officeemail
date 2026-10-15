@@ -8,6 +8,13 @@
       "when": 1790966822708,
       "tag": "0000_modern_silver_fox",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792081755629,
+      "tag": "0001_strange_patch",
+      "breakpoints": true
     }
   ]
 }

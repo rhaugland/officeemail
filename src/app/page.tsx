@@ -22,6 +22,13 @@ type Contact = {
 };
 
 
+type Attachment = {
+  id: string;
+  filename: string;
+  contentType: string;
+  size: number;
+};
+
 type Message = {
   id: string;
   contactId: string;
@@ -29,6 +36,7 @@ type Message = {
   subject: string;
   body: string;
   createdAt: string;
+  attachments: Attachment[];
 };
 
 type Thread = {
@@ -168,6 +176,17 @@ export default function Home() {
   const [replyBody, setReplyBody] = useState("");
   const [sendingReply, setSendingReply] = useState(false);
   const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set());
+
+  // Compose state
+  const [showCompose, setShowCompose] = useState(false);
+  const [composeTo, setComposeTo] = useState("");
+  const [composeSubject, setComposeSubject] = useState("");
+  const [composeBody, setComposeBody] = useState("");
+  const [composeAttachments, setComposeAttachments] = useState<Array<{ filename: string; contentType: string; content: string; size: number }>>([]);
+  const [composeSending, setComposeSending] = useState(false);
+
+  // Reply attachments
+  const [replyAttachments, setReplyAttachments] = useState<Array<{ filename: string; contentType: string; content: string; size: number }>>([]);
 
   // Import state
   const [importing, setImporting] = useState(false);
@@ -438,11 +457,44 @@ export default function Home() {
     await fetch("/api/inbox/reply", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ contactId: selectedContactId, subject, body: replyBody }),
+      body: JSON.stringify({ contactId: selectedContactId, subject, body: replyBody, attachments: replyAttachments.length > 0 ? replyAttachments : undefined }),
     });
     setReplyBody("");
+    setReplyAttachments([]);
     setSendingReply(false);
     fetchThreads();
+  };
+
+  const handleFileUpload = (files: FileList | null, target: "compose" | "reply") => {
+    if (!files) return;
+    const setter = target === "compose" ? setComposeAttachments : setReplyAttachments;
+    Array.from(files).forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64 = (reader.result as string).split(",")[1];
+        setter((prev) => [...prev, { filename: file.name, contentType: file.type || "application/octet-stream", content: base64, size: file.size }]);
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const sendCompose = async () => {
+    if (!composeTo.trim() || !composeSubject.trim() || !composeBody.trim()) return;
+    setComposeSending(true);
+    await fetch("/api/compose", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ to: composeTo, subject: composeSubject, body: composeBody, attachments: composeAttachments.length > 0 ? composeAttachments : undefined }),
+    });
+    setComposeTo("");
+    setComposeSubject("");
+    setComposeBody("");
+    setComposeAttachments([]);
+    setShowCompose(false);
+    setComposeSending(false);
+    fetchThreads();
+    fetchContacts();
+    fetchDashboard();
   };
 
   const toggleExpand = (msgId: string) => {
@@ -539,6 +591,12 @@ export default function Home() {
             </div>
           )}
           <div className="ml-auto flex items-center gap-2">
+            <button
+              onClick={() => setShowCompose(true)}
+              className="px-4 py-1.5 text-xs font-semibold rounded-full bg-gradient-to-r from-[#ffb428] to-[#e64664] text-[#0a0a0a] hover:opacity-90 transition-all"
+            >
+              Compose
+            </button>
             <button
               onClick={() => setPanel(panel === "contacts" ? null : "contacts")}
               className={`px-4 py-1.5 text-xs font-medium rounded-full transition-all ${panel === "contacts" ? "bg-gradient-to-r from-[#ffb428] to-[#e64664] text-[#0a0a0a]" : "text-[#6b6560] border border-[#2a2a2a] hover:border-[#3a3530]"}`}
@@ -727,7 +785,18 @@ export default function Home() {
                       </button>
                       {!isCollapsed && (
                         <div className="px-4 sm:px-8 pb-6 pl-[60px] sm:pl-[76px]">
-                          <div className="text-sm text-[#e8e0d8] prose prose-sm prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: msg.body }} />
+                          <div className="text-sm text-[#e8e0d8] prose prose-sm prose-invert max-w-none [&_img]:max-w-full [&_img]:h-auto" dangerouslySetInnerHTML={{ __html: msg.body }} />
+                          {msg.attachments?.length > 0 && (
+                            <div className="flex flex-wrap gap-2 mt-3">
+                              {msg.attachments.map((att) => (
+                                <a key={att.id} href={`/api/attachments/${att.id}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1e1e1e] border border-[#2a2a2a] rounded-lg text-[11px] text-[#e8e0d8] hover:border-[#ffb428]/50 transition-all">
+                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" /></svg>
+                                  <span className="truncate max-w-[150px]">{att.filename}</span>
+                                  <span className="text-[#5a5550]">({(att.size / 1024).toFixed(0)}KB)</span>
+                                </a>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -737,11 +806,27 @@ export default function Home() {
 
               {/* Reply */}
               <div className="border-t border-[#1e1e1e] bg-[#0a0a0a] px-4 sm:px-8 py-4 flex-shrink-0">
+                {replyAttachments.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {replyAttachments.map((att, i) => (
+                      <span key={i} className="flex items-center gap-1 px-2 py-1 bg-[#1e1e1e] border border-[#2a2a2a] rounded-lg text-[10px] text-[#e8e0d8]">
+                        <span className="truncate max-w-[120px]">{att.filename}</span>
+                        <button onClick={() => setReplyAttachments((prev) => prev.filter((_, j) => j !== i))} className="text-[#5a5550] hover:text-[#e64664] ml-0.5">&times;</button>
+                      </span>
+                    ))}
+                  </div>
+                )}
                 <div className="flex gap-3">
                   <textarea value={replyBody} onChange={(e) => setReplyBody(e.target.value)} placeholder="Write a reply..." rows={3} className="flex-1 border border-[#2a2a2a] rounded-2xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#ffb428]/30 focus:border-[#ffb428]/50 transition-all bg-[#111] text-[#e8e0d8] placeholder-[#3a3530]" />
-                  <button onClick={sendReply} disabled={sendingReply || !replyBody.trim()} className="px-5 py-2 bg-gradient-to-r from-[#ffb428] to-[#e64664] text-[#0a0a0a] text-sm font-semibold rounded-full hover:opacity-90 disabled:opacity-40 self-end transition-all">
-                    {sendingReply ? "..." : "Reply"}
-                  </button>
+                  <div className="flex flex-col gap-2 self-end">
+                    <label className="cursor-pointer px-3 py-2 border border-[#2a2a2a] rounded-full text-[#6b6560] hover:border-[#3a3530] transition-all flex items-center justify-center">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" /></svg>
+                      <input type="file" multiple className="hidden" onChange={(e) => handleFileUpload(e.target.files, "reply")} />
+                    </label>
+                    <button onClick={sendReply} disabled={sendingReply || !replyBody.trim()} className="px-5 py-2 bg-gradient-to-r from-[#ffb428] to-[#e64664] text-[#0a0a0a] text-sm font-semibold rounded-full hover:opacity-90 disabled:opacity-40 transition-all">
+                      {sendingReply ? "..." : "Reply"}
+                    </button>
+                  </div>
                 </div>
               </div>
             </>
@@ -913,6 +998,46 @@ export default function Home() {
           </>
         )}
       </div>
+
+      {/* Compose Modal */}
+      {showCompose && (
+        <>
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-[2px] z-50" onClick={() => setShowCompose(false)} />
+          <div className="fixed bottom-6 right-6 w-[520px] max-w-[calc(100vw-2rem)] bg-[#111] border border-[#2a2a2a] rounded-2xl shadow-2xl shadow-black/50 z-50 flex flex-col max-h-[80vh]">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-[#1e1e1e]">
+              <span className="text-sm font-semibold text-[#e8e0d8]">New Message</span>
+              <button onClick={() => { setShowCompose(false); setComposeTo(""); setComposeSubject(""); setComposeBody(""); setComposeAttachments([]); }} className="text-[#5a5550] hover:text-[#e8e0d8] text-lg transition-colors">&times;</button>
+            </div>
+            <div className="px-4 py-2 space-y-2 flex-1 overflow-y-auto">
+              <input value={composeTo} onChange={(e) => setComposeTo(e.target.value)} placeholder="To (email address)" className="w-full px-3 py-2 text-sm border border-[#2a2a2a] rounded-xl bg-[#0a0a0a] text-[#e8e0d8] placeholder-[#3a3530] focus:outline-none focus:ring-2 focus:ring-[#ffb428]/30 transition-all" />
+              <input value={composeSubject} onChange={(e) => setComposeSubject(e.target.value)} placeholder="Subject" className="w-full px-3 py-2 text-sm border border-[#2a2a2a] rounded-xl bg-[#0a0a0a] text-[#e8e0d8] placeholder-[#3a3530] focus:outline-none focus:ring-2 focus:ring-[#ffb428]/30 transition-all" />
+              <textarea value={composeBody} onChange={(e) => setComposeBody(e.target.value)} placeholder="Write your message..." rows={8} className="w-full px-3 py-2 text-sm border border-[#2a2a2a] rounded-xl bg-[#0a0a0a] text-[#e8e0d8] placeholder-[#3a3530] resize-none focus:outline-none focus:ring-2 focus:ring-[#ffb428]/30 transition-all" />
+              {composeAttachments.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {composeAttachments.map((att, i) => (
+                    <span key={i} className="flex items-center gap-1 px-2 py-1 bg-[#1e1e1e] border border-[#2a2a2a] rounded-lg text-[10px] text-[#e8e0d8]">
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" /></svg>
+                      <span className="truncate max-w-[120px]">{att.filename}</span>
+                      <span className="text-[#5a5550]">({(att.size / 1024).toFixed(0)}KB)</span>
+                      <button onClick={() => setComposeAttachments((prev) => prev.filter((_, j) => j !== i))} className="text-[#5a5550] hover:text-[#e64664] ml-0.5">&times;</button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="px-4 py-3 border-t border-[#1e1e1e] flex items-center justify-between">
+              <label className="cursor-pointer px-3 py-1.5 border border-[#2a2a2a] rounded-full text-[#6b6560] hover:border-[#3a3530] transition-all flex items-center gap-1.5 text-[11px]">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" /></svg>
+                Attach
+                <input type="file" multiple className="hidden" onChange={(e) => handleFileUpload(e.target.files, "compose")} />
+              </label>
+              <button onClick={sendCompose} disabled={composeSending || !composeTo.trim() || !composeSubject.trim() || !composeBody.trim()} className="px-5 py-2 bg-gradient-to-r from-[#ffb428] to-[#e64664] text-[#0a0a0a] text-sm font-semibold rounded-full hover:opacity-90 disabled:opacity-40 transition-all">
+                {composeSending ? "Sending..." : "Send"}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

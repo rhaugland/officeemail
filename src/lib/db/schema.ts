@@ -73,3 +73,13 @@ export const messages = pgTable("messages", {
   resendId: text("resend_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+export const attachments = pgTable("attachments", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  messageId: uuid("message_id").notNull(),
+  filename: text("filename").notNull(),
+  contentType: text("content_type").notNull(),
+  content: text("content").notNull(), // base64
+  size: integer("size").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { messages, contacts, sends } from "@/lib/db/schema";
+import { messages, contacts, sends, attachments } from "@/lib/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { Resend } from "resend";
 
@@ -42,13 +42,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, skipped: "no from" });
     }
 
-    // Fetch full email body from Resend API
+    // Fetch full email body and attachments from Resend API
     let body = "";
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let inboundAttachments: any[] = [];
     if (emailId) {
       try {
         const full = await getResend().emails.receiving.get(emailId);
         if (full.data) {
-          body = full.data.text || full.data.html || "";
+          body = full.data.html || full.data.text || "";
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          inboundAttachments = (full.data as any).attachments || [];
         }
       } catch {
         // If fetch fails, store what we have
@@ -91,12 +95,32 @@ export async function POST(request: Request) {
         contact = newContact;
       }
 
-      await getDb().insert(messages).values({
-        contactId: contact.id,
-        direction: "inbound",
-        subject: "Demo Question",
-        body: demoQuestion.message || body,
-      });
+      const [demoMsg] = await getDb()
+        .insert(messages)
+        .values({
+          contactId: contact.id,
+          direction: "inbound",
+          subject: "Demo Question",
+          body: demoQuestion.message || body,
+        })
+        .returning();
+
+      // Store inbound attachments
+      if (inboundAttachments.length > 0) {
+        await getDb()
+          .insert(attachments)
+          .values(
+            inboundAttachments.map(
+              (a: { filename: string; content_type: string; content: string }) => ({
+                messageId: demoMsg.id,
+                filename: a.filename || "attachment",
+                contentType: a.content_type || "application/octet-stream",
+                content: a.content || "",
+                size: a.content ? Buffer.from(a.content, "base64").length : 0,
+              })
+            )
+          );
+      }
 
       if (contact.status !== "replied" && contact.status !== "opted_out") {
         await getDb()
@@ -149,12 +173,32 @@ export async function POST(request: Request) {
       contact = newContact;
     }
 
-    await getDb().insert(messages).values({
-      contactId: contact.id,
-      direction: "inbound",
-      subject,
-      body: body || "(email body unavailable)",
-    });
+    const [storedMsg] = await getDb()
+      .insert(messages)
+      .values({
+        contactId: contact.id,
+        direction: "inbound",
+        subject,
+        body: body || "(email body unavailable)",
+      })
+      .returning();
+
+    // Store inbound attachments
+    if (inboundAttachments.length > 0) {
+      await getDb()
+        .insert(attachments)
+        .values(
+          inboundAttachments.map(
+            (a: { filename: string; content_type: string; content: string }) => ({
+              messageId: storedMsg.id,
+              filename: a.filename || "attachment",
+              contentType: a.content_type || "application/octet-stream",
+              content: a.content || "",
+              size: a.content ? Buffer.from(a.content, "base64").length : 0,
+            })
+          )
+        );
+    }
 
     if (contact.status !== "replied" && contact.status !== "opted_out") {
       await getDb()
