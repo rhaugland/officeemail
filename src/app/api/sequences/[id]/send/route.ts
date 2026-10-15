@@ -59,16 +59,17 @@ export async function POST(
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
   for (const contact of eligible) {
-    const personalizedBody = htmlToText(
-      phase.body
+    const personalizedHtml = phase.body
         .replace(/{{first_name}}/g, contact.firstName)
         .replace(/{{last_name}}/g, contact.lastName)
         .replace(/{{company}}/g, contact.companyName)
-        .replace(/{{title}}/g, contact.title)
-    );
+        .replace(/{{title}}/g, contact.title);
+
+    const personalizedText = htmlToText(personalizedHtml);
 
     const optOutUrl = `${appUrl}/api/opt-out?id=${contact.id}`;
-    const textWithOptOut = `${personalizedBody}\n\n---\nUnsubscribe: ${optOutUrl}`;
+    const htmlWithOptOut = `${personalizedHtml}<br><br><hr><p style="font-size:12px;color:#999;"><a href="${optOutUrl}">Unsubscribe</a></p>`;
+    const textWithOptOut = `${personalizedText}\n\n---\nUnsubscribe: ${optOutUrl}`;
 
     try {
       const result = await getResend().emails.send({
@@ -77,6 +78,7 @@ export async function POST(
         subject: phase.subject
           .replace(/{{first_name}}/g, contact.firstName)
           .replace(/{{company}}/g, contact.companyName),
+        html: htmlWithOptOut,
         text: textWithOptOut,
       });
 
@@ -94,7 +96,7 @@ export async function POST(
         contactId: contact.id,
         direction: "outbound",
         subject: personalizedSubject,
-        body: personalizedBody,
+        body: personalizedHtml,
         resendId: result.data?.id || null,
       });
 

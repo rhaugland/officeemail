@@ -103,13 +103,13 @@ export async function GET(request: NextRequest) {
       }
 
       for (const contact of eligible) {
-        const personalizedBody = htmlToText(
-          phase.body
+        const personalizedHtml = phase.body
             .replace(/{{first_name}}/g, contact.firstName)
             .replace(/{{last_name}}/g, contact.lastName)
             .replace(/{{company}}/g, contact.companyName)
-            .replace(/{{title}}/g, contact.title)
-        );
+            .replace(/{{title}}/g, contact.title);
+
+        const personalizedText = htmlToText(personalizedHtml);
 
         const personalizedSubject = phase.subject
           .replace(/{{first_name}}/g, contact.firstName)
@@ -122,7 +122,8 @@ export async function GET(request: NextRequest) {
             from: process.env.RESEND_FROM_EMAIL || "noreply@example.com",
             to: contact.email,
             subject: personalizedSubject,
-            text: personalizedBody,
+            html: personalizedHtml,
+            text: personalizedText,
           });
 
           await getDb().insert(sends).values({
@@ -135,7 +136,7 @@ export async function GET(request: NextRequest) {
             contactId: contact.id,
             direction: "outbound",
             subject: personalizedSubject,
-            body: personalizedBody,
+            body: personalizedHtml,
             resendId: result.data?.id || null,
           });
 
